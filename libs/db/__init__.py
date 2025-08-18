@@ -1,13 +1,5 @@
-"""Database package providing ORM models and repositories."""
+"""Database utilities for BaseKnowledge."""
 
-from .database import Base, engine, get_session, SessionLocal
-from . import models, repositories
+from .metadata_repository import MetadataRepository
 
-__all__ = [
-    "Base",
-    "engine",
-    "get_session",
-    "SessionLocal",
-    "models",
-    "repositories",
-]
+__all__ = ["MetadataRepository"]
