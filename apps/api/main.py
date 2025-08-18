@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from telegram import Bot, Update
 
 # ---------------------------------------------------------------------------
 # Dependencies
@@ -17,7 +18,11 @@ from pydantic import BaseModel, Field
 class DummyDB:
     """Placeholder database connection."""
 
-    pass
+    def __init__(self) -> None:
+        self.telegram_users: set[int] = set()
+
+    def save_telegram_user(self, user_id: int) -> None:
+        self.telegram_users.add(user_id)
 
 
 class DummyVectorIndex:
@@ -39,6 +44,7 @@ from libs.storage.notes_storage import NotesStorage, Note
 from libs.llm.replicate_client import ReplicateLLMClient
 from libs.llm.embeddings_provider import EmbeddingsProvider
 
+MAX_NOTE_LEN = 1000
 
 def get_db() -> DummyDB:
     return DummyDB()
@@ -203,11 +209,34 @@ def export_zip(storage: NotesStorage = Depends(get_storage)) -> FileResponse:
 
 
 @app.post("/telegram/webhook/{secret}")
-def telegram_webhook(secret: str, payload: Dict[str, Any]) -> Dict[str, str]:
+def telegram_webhook(
+    secret: str,
+    payload: Dict[str, Any],
+    uc: IngestText = Depends(ingest_text_uc),
+    db: DummyDB = Depends(get_db),
+) -> Dict[str, str]:
     expected = os.getenv("TELEGRAM_WEBHOOK_SECRET")
     if expected and secret != expected:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid secret")
-    # Stub: in real implementation, process payload
+
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    bot = Bot(token) if token else None
+    update = Update.de_json(payload, bot)
+    msg = update.message
+
+    if not msg or not msg.forward_date or not msg.text:
+        return {"status": "ignored"}
+
+    user_id = msg.from_user.id if msg.from_user else None
+    if user_id is not None:
+        db.save_telegram_user(user_id)
+
+    text = msg.text
+    parts = [text] if len(text) <= MAX_NOTE_LEN else [text[i : i + MAX_NOTE_LEN] for i in range(0, len(text), MAX_NOTE_LEN)]
+    for part in parts:
+        req = IngestTextRequest(text=part, author=str(user_id) if user_id else None, channel="telegram")
+        uc(req)
+
     return {"status": "ok"}
 
 
