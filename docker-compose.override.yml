@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: baseknowledge_test
+    ports:
+      - "5433:5432"
+  milvus:
+    ports:
+      - "19531:19530"
