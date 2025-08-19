@@ -32,6 +32,28 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     assert (vault / "10_Notes" / "my-note.md").exists()
 
 
+def test_ingest_text_russian_title(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    storage = NotesStorage(vault)
+
+    llm = MagicMock()
+    llm.generate_structured_notes.return_value = [
+        {"title": "Привет Мир", "tags": [], "meta": {}}
+    ]
+    llm.render_note_markdown.return_value = "Body text"
+
+    embedder = MagicMock()
+    embedder.embed_texts.return_value = [[0.0, 0.1, 0.2]]
+
+    index = MagicMock()
+    repo = MetadataRepository()
+
+    ingest = IngestText(llm, storage, embedder, index, repo)
+    ingest("raw text")
+
+    assert (vault / "10_Notes" / "privet-mir.md").exists()
+
+
 def test_search_returns_answer(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     storage = NotesStorage(vault)

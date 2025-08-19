@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import re
+import unicodedata
 from typing import Any, Dict, List
 
 from libs.llm import LLMClient, EmbeddingsProvider
@@ -11,8 +12,48 @@ from libs.db import MetadataRepository
 from libs.core.models import Note as NoteModel, Chunk as ChunkModel
 
 
+_CYRILLIC_MAP = {
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "д": "d",
+    "е": "e",
+    "ё": "e",
+    "ж": "zh",
+    "з": "z",
+    "и": "i",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "h",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "shch",
+    "ъ": "",
+    "ы": "y",
+    "ь": "",
+    "э": "e",
+    "ю": "yu",
+    "я": "ya",
+}
+
+
 def _slugify(text: str) -> str:
     text = text.lower()
+    text = "".join(_CYRILLIC_MAP.get(ch, ch) for ch in text)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = re.sub(r"[^a-z0-9]+", "-", text)
     return text.strip("-")
 
