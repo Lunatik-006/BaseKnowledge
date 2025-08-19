@@ -31,7 +31,7 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
 @asynccontextmanager
-def get_session() -> AsyncIterator[AsyncSession]:
+async def get_session() -> AsyncIterator[AsyncSession]:
     """Provide a transactional scope around a series of operations."""
 
     async with SessionLocal() as session:  # pragma: no cover - simple wrapper

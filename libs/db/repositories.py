@@ -49,9 +49,16 @@ class NoteRepo:
         title: str,
         file_path: str,
         tags: Optional[List[str]] = None,
+        id: Optional[str] = None,
         **kwargs,
     ) -> models.Note:
-        note = models.Note(title=title, file_path=file_path, tags=tags or [], **kwargs)
+        note = models.Note(
+            id=id,
+            title=title,
+            file_path=file_path,
+            tags=tags or [],
+            **kwargs,
+        )
         self.session.add(note)
         await self.session.flush()
         return note

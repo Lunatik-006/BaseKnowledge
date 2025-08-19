@@ -1,9 +1,9 @@
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 from libs.usecases import IngestText, Search
 from libs.storage import NotesStorage, Note
-from libs.db import MetadataRepository
+from libs.db import models, NoteRepo, ChunkRepo
 
 
 def test_ingest_text_pipeline(tmp_path: Path) -> None:
@@ -20,10 +20,18 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     embedder.embed_texts.return_value = [[0.0, 0.1, 0.2]]
 
     index = MagicMock()
-    repo = MetadataRepository()
+    note_repo = AsyncMock(spec=NoteRepo)
+    note_repo.create.return_value = models.Note(
+        id="my-note", title="My Note", tags=["x"], file_path=str(storage.notes_dir / "my-note.md")
+    )
+    chunk_repo = AsyncMock(spec=ChunkRepo)
+    chunk_repo.create.return_value = models.Chunk(
+        id="1", note_id="my-note", pos=0, anchor=None
+    )
 
-    ingest = IngestText(llm, storage, embedder, index, repo)
-    ingest("raw text")
+    ingest = IngestText(llm, storage, embedder, index, note_repo, chunk_repo)
+    import asyncio
+    asyncio.run(ingest("raw text"))
 
     llm.generate_structured_notes.assert_called_once_with("raw text")
     llm.render_note_markdown.assert_called_once()
