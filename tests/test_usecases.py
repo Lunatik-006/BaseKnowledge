@@ -44,8 +44,9 @@ def test_search_returns_answer(tmp_path: Path) -> None:
     embedder.embed_texts.return_value = [[0.0, 0.1, 0.2]]
 
     index = MagicMock()
+    long_text = "x" * 250
     index.search.return_value = [
-        {"chunk_id": 1, "note_id": "n1", "pos": 0, "text": "body"}
+        {"chunk_id": 1, "note_id": "n1", "pos": 0, "text": long_text}
     ]
 
     searcher = Search(llm, embedder, index, storage)
@@ -54,4 +55,8 @@ def test_search_returns_answer(tmp_path: Path) -> None:
     embedder.embed_texts.assert_called_once_with(["query"])
     index.search.assert_called_once()
     llm.answer_from_context.assert_called_once()
+    args, _ = llm.answer_from_context.call_args
+    fragments = args[1]
+    assert fragments[0]["snippet"].endswith("...")
+    assert len(fragments[0]["snippet"]) <= 200
     assert result == "answer"
