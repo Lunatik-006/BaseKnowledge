@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from libs.llm import LLMClient, EmbeddingsProvider
 from libs.rag import VectorIndex
 from libs.storage import NotesStorage, Note as FsNote
+from libs.storage.notes_storage import _load_yaml
 from libs.db import MetadataRepository
 from libs.core.models import Note as NoteModel, Chunk as ChunkModel
 
@@ -52,11 +53,20 @@ class IngestText:
         insights: List[Dict[str, Any]] = self.llm.generate_structured_notes(text)
         notes: List[NoteModel] = []
         for insight in insights:
-            title = insight.get("title", "untitled")
+            rendered = self.llm.render_note_markdown(insight)
+            front: Dict[str, Any] = {}
+            body = rendered
+            if rendered.startswith("---"):
+                parts = rendered.split("---", 2)
+                if len(parts) == 3:
+                    _, fm, body = parts
+                    front = _load_yaml(fm)
+                    body = body.lstrip("\n")
+
+            title = front.get("title") or insight.get("title", "untitled")
+            tags = front.get("tags") or insight.get("tags", [])
+            meta = front.get("meta") or insight.get("meta", {})
             slug = _slugify(title)
-            body = self.llm.render_note_markdown(insight)
-            tags = insight.get("tags", [])
-            meta = insight.get("meta", {})
 
             fs_note = FsNote(slug=slug, title=title, tags=tags, meta=meta, body=body)
             self.storage.save_note(fs_note)
