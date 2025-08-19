@@ -11,9 +11,9 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     storage = NotesStorage(vault)
 
     llm = MagicMock()
-    llm.generate_structured_notes.return_value = [
-        {"title": "My Note", "tags": ["x"], "meta": {}}
-    ]
+    llm.generate_structured_notes.return_value = {
+        "insights": [{"title": "My Note", "tags": ["x"], "meta": {}}]
+    }
     llm.render_note_markdown.return_value = "Body text"
 
     embedder = MagicMock()
@@ -30,6 +30,27 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     embedder.embed_texts.assert_called_once()
     index.upsert_chunks.assert_called_once()
     assert (vault / "10_Notes" / "my-note.md").exists()
+
+
+def test_ingest_text_handles_no_insights(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    storage = NotesStorage(vault)
+
+    llm = MagicMock()
+    llm.generate_structured_notes.return_value = {"insights": []}
+
+    embedder = MagicMock()
+    index = MagicMock()
+    repo = MetadataRepository()
+
+    ingest = IngestText(llm, storage, embedder, index, repo)
+    result = ingest("raw text")
+
+    assert result == []
+    llm.render_note_markdown.assert_not_called()
+    embedder.embed_texts.assert_not_called()
+    index.upsert_chunks.assert_not_called()
+    assert not (vault / "10_Notes").exists()
 
 
 def test_search_returns_answer(tmp_path: Path) -> None:
