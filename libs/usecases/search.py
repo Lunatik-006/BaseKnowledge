@@ -7,6 +7,9 @@ from libs.rag import VectorIndex
 from libs.storage import NotesStorage
 
 
+MAX_SNIPPET_LEN = 200
+
+
 class Search:
     """Run semantic search over notes and compose an LLM answer."""
 
@@ -29,12 +32,15 @@ class Search:
         fragments: List[Dict[str, str]] = []
         for hit in hits:
             note = self.storage.read_note(hit["note_id"])
+            snippet = hit["text"]
+            if len(snippet) > MAX_SNIPPET_LEN:
+                snippet = snippet[: MAX_SNIPPET_LEN - 3].rstrip() + "..."
             fragments.append(
                 {
                     "note_id": hit["note_id"],
                     "title": note.title,
                     "url": f"obsidian://{note.slug}",
-                    "text": hit["text"],
+                    "snippet": snippet,
                 }
             )
         return self.llm.answer_from_context(query, fragments)
