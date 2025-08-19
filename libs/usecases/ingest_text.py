@@ -50,7 +50,10 @@ class IngestText:
 
     # ------------------------------------------------------------------
     def __call__(self, text: str) -> List[NoteModel]:
-        insights: List[Dict[str, Any]] = self.llm.generate_structured_notes(text)
+        data = self.llm.generate_structured_notes(text)
+        insights: List[Dict[str, Any]] = data.get("insights", [])
+        if not insights:
+            return []
         notes: List[NoteModel] = []
         for insight in insights:
             rendered = self.llm.render_note_markdown(insight)
