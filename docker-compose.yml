@@ -1,0 +1,46 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api/Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - milvus
+    ports:
+      - "8000:8000"
+  miniapp:
+    build:
+      context: .
+      dockerfile: infra/docker/miniapp/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    env_file:
+      - .env
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-baseknowledge}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+  milvus:
+    image: milvusdb/milvus:v2.3.10
+    restart: unless-stopped
+    ports:
+      - "19530:19530"
+    volumes:
+      - milvus_data:/var/lib/milvus
+volumes:
+  postgres_data:
+  milvus_data:
