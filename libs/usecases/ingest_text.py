@@ -1,16 +1,61 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, Dict, List
 
 from libs.llm import LLMClient, EmbeddingsProvider
 from libs.rag import VectorIndex
 from libs.storage import NotesStorage, Note as FsNote
 from libs.db import models, NoteRepo, ChunkRepo
+from libs.storage.notes_storage import _load_yaml
+from libs.db import MetadataRepository
+from libs.core.models import Note as NoteModel, Chunk as ChunkModel
+
+
+
+_CYRILLIC_MAP = {
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "д": "d",
+    "е": "e",
+    "ё": "e",
+    "ж": "zh",
+    "з": "z",
+    "и": "i",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "h",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "shch",
+    "ъ": "",
+    "ы": "y",
+    "ь": "",
+    "э": "e",
+    "ю": "yu",
+    "я": "ya",
+}
 
 
 def _slugify(text: str) -> str:
     text = text.lower()
+    text = "".join(_CYRILLIC_MAP.get(ch, ch) for ch in text)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = re.sub(r"[^a-z0-9]+", "-", text)
     return text.strip("-")
 
@@ -51,11 +96,20 @@ class IngestText:
         insights: List[Dict[str, Any]] = self.llm.generate_structured_notes(text)
         notes: List[models.Note] = []
         for insight in insights:
-            title = insight.get("title", "untitled")
+            rendered = self.llm.render_note_markdown(insight)
+            front: Dict[str, Any] = {}
+            body = rendered
+            if rendered.startswith("---"):
+                parts = rendered.split("---", 2)
+                if len(parts) == 3:
+                    _, fm, body = parts
+                    front = _load_yaml(fm)
+                    body = body.lstrip("\n")
+
+            title = front.get("title") or insight.get("title", "untitled")
+            tags = front.get("tags") or insight.get("tags", [])
+            meta = front.get("meta") or insight.get("meta", {})
             slug = _slugify(title)
-            body = self.llm.render_note_markdown(insight)
-            tags = insight.get("tags", [])
-            meta = insight.get("meta", {})
 
             fs_note = FsNote(slug=slug, title=title, tags=tags, meta=meta, body=body)
             self.storage.save_note(fs_note)
