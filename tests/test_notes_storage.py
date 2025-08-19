@@ -1,8 +1,4 @@
 from pathlib import Path
-import sys
-
-# ensure project root on sys.path
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from libs.storage import Note, NotesStorage
 

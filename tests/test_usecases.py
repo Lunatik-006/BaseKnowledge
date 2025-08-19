@@ -1,8 +1,5 @@
 from pathlib import Path
-import sys
 from unittest.mock import MagicMock
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from libs.usecases import IngestText, Search
 from libs.storage import NotesStorage, Note
