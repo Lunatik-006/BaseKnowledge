@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 import re
 import unicodedata
 from typing import Any, Dict, List
@@ -8,9 +7,11 @@ from typing import Any, Dict, List
 from libs.llm import LLMClient, EmbeddingsProvider
 from libs.rag import VectorIndex
 from libs.storage import NotesStorage, Note as FsNote
+from libs.db import models, NoteRepo, ChunkRepo
 from libs.storage.notes_storage import _load_yaml
 from libs.db import MetadataRepository
 from libs.core.models import Note as NoteModel, Chunk as ChunkModel
+
 
 
 _CYRILLIC_MAP = {
@@ -80,22 +81,20 @@ class IngestText:
         storage: NotesStorage,
         embeddings: EmbeddingsProvider,
         index: VectorIndex,
-        repo: MetadataRepository,
+        note_repo: NoteRepo,
+        chunk_repo: ChunkRepo,
     ) -> None:
         self.llm = llm
         self.storage = storage
         self.embeddings = embeddings
         self.index = index
-        self.repo = repo
-        self._chunk_id = itertools.count(1)
+        self.note_repo = note_repo
+        self.chunk_repo = chunk_repo
 
     # ------------------------------------------------------------------
-    def __call__(self, text: str) -> List[NoteModel]:
-        data = self.llm.generate_structured_notes(text)
-        insights: List[Dict[str, Any]] = data.get("insights", [])
-        if not insights:
-            return []
-        notes: List[NoteModel] = []
+    async def __call__(self, text: str) -> List[models.Note]:
+        insights: List[Dict[str, Any]] = self.llm.generate_structured_notes(text)
+        notes: List[models.Note] = []
         for insight in insights:
             rendered = self.llm.render_note_markdown(insight)
             front: Dict[str, Any] = {}
@@ -115,27 +114,29 @@ class IngestText:
             fs_note = FsNote(slug=slug, title=title, tags=tags, meta=meta, body=body)
             self.storage.save_note(fs_note)
 
-            note_model = NoteModel(id=slug, title=title, tags=tags, file_path=str(self.storage.notes_dir / f"{slug}.md"))
-            self.repo.add_note(note_model)
+            note = await self.note_repo.create(
+                id=slug,
+                title=title,
+                file_path=str(self.storage.notes_dir / f"{slug}.md"),
+                tags=tags,
+                **meta,
+            )
 
             chunk_texts = _chunk_text(body)
             embeddings = self.embeddings.embed_texts(chunk_texts)
             chunks_for_index = []
-            chunk_models: List[ChunkModel] = []
             for pos, (ch_text, emb) in enumerate(zip(chunk_texts, embeddings)):
-                cid = next(self._chunk_id)
+                chunk = await self.chunk_repo.create(note_id=note.id, pos=pos)
                 chunks_for_index.append(
                     {
-                        "chunk_id": cid,
-                        "note_id": slug,
+                        "chunk_id": chunk.id,
+                        "note_id": note.id,
                         "pos": pos,
                         "text": ch_text,
                         "embedding": emb,
                     }
                 )
-                chunk_models.append(ChunkModel(id=str(cid), note_id=slug, pos=pos, text=ch_text))
             if chunks_for_index:
                 self.index.upsert_chunks(chunks_for_index)
-                self.repo.add_chunks(chunk_models)
-            notes.append(note_model)
+            notes.append(note)
         return notes
