@@ -11,10 +11,18 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     storage = NotesStorage(vault)
 
     llm = MagicMock()
-    llm.generate_structured_notes.return_value = {
-        "insights": [{"title": "My Note", "tags": ["x"], "meta": {}}]
-    }
-    llm.render_note_markdown.return_value = "Body text"
+
+    llm.generate_structured_notes.return_value = [
+        {"title": "My Note", "tags": ["x"], "meta": {}}
+    ]
+    llm.render_note_markdown.return_value = (
+        "---\n"
+        "title: My Note\n"
+        "tags:\n  - x\n"
+        "---\n\n"
+        "Body text"
+    )
+
 
     embedder = MagicMock()
     embedder.embed_texts.return_value = [[0.0, 0.1, 0.2]]
@@ -27,9 +35,13 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
 
     llm.generate_structured_notes.assert_called_once_with("raw text")
     llm.render_note_markdown.assert_called_once()
-    embedder.embed_texts.assert_called_once()
+    embedder.embed_texts.assert_called_once_with(["Body text"])
     index.upsert_chunks.assert_called_once()
-    assert (vault / "10_Notes" / "my-note.md").exists()
+    note_path = vault / "10_Notes" / "my-note.md"
+    assert note_path.exists()
+    content = note_path.read_text()
+    assert content.count("---") == 2
+    assert content.endswith("Body text\n")
 
 
 def test_ingest_text_handles_no_insights(tmp_path: Path) -> None:
