@@ -4,7 +4,17 @@ WORKDIR /app
 COPY libs ./libs
 COPY apps/api ./apps/api
 
-RUN pip install --no-cache-dir fastapi uvicorn[standard] python-telegram-bot replicate requests
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn[standard] \
+    python-telegram-bot \
+    replicate \
+    requests \
+    sqlalchemy \
+    pydantic-settings \
+    "psycopg[binary]" \
+    pymilvus \
+    alembic
 
 ENV PYTHONPATH=/app
 EXPOSE 8000
