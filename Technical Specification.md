@@ -121,7 +121,7 @@ vault/
 
 ## 5) REST API (кратко)
 
-- `POST /ingest/text` — `{text, source_url?, author?, dt?, channel?}` → `{notes:[{id,title,file_path}]}`  
+- `POST /ingest/text` — `{text, source_url?, author?, dt?, channel?}` → `{notes:[{id,title,content}]}`
 - `GET /notes` — список заметок  
 - `GET /notes/{id}` — содержимое (md/мета)  
 - `POST /search` — `{query, k?}` → `{answer_md, items:[{id,title,url,snippet}]}`  
