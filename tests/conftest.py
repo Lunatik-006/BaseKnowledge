@@ -12,7 +12,23 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 # Provide dummy external modules
-sys.modules.setdefault("telegram", SimpleNamespace(Bot=object, Update=object))
+
+
+class _DummyBot:
+    def __init__(self, token: str | None = None) -> None:
+        self.token = token
+
+
+class _DummyUpdate:
+    @staticmethod
+    def de_json(data, bot):  # type: ignore[override]
+        msg = data.get("message")
+        if msg:
+            return SimpleNamespace(message=SimpleNamespace(**msg))
+        return SimpleNamespace(message=None)
+
+
+sys.modules.setdefault("telegram", SimpleNamespace(Bot=_DummyBot, Update=_DummyUpdate))
 sys.modules.setdefault("replicate", SimpleNamespace(run=lambda *args, **kwargs: None))
 
 from apps.api.main import app, get_storage, ingest_text_uc, search_uc
