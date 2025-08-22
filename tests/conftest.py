@@ -24,7 +24,7 @@ class DummyIngestText:
         self.storage = storage
 
     async def __call__(self, text: str):
-        note = Note(slug="n1", title="n1", tags=[], meta={}, body=text)
+        note = Note(slug="n1", title="n1", tags=[], body=text)
         self.storage.save_note(note)
         return [SimpleNamespace(id=note.slug, title=note.title)]
 
