@@ -98,12 +98,20 @@ def search_uc(
 
 
 @app.post("/ingest/text", status_code=status.HTTP_201_CREATED)
-async def ingest_text(req: IngestTextRequest, uc: IngestText = Depends(ingest_text_uc)) -> JSONResponse:
+async def ingest_text(
+    req: IngestTextRequest,
+    uc: IngestText = Depends(ingest_text_uc),
+    storage: NotesStorage = Depends(get_storage),
+) -> JSONResponse:
     try:
         notes = await uc(req.text)
         result = {
             "notes": [
-                {"id": n.id, "title": n.title, "file_path": n.file_path}
+                {
+                    "id": n.id,
+                    "title": n.title,
+                    "content": storage.read_note(n.id).body,
+                }
                 for n in notes
             ]
         }

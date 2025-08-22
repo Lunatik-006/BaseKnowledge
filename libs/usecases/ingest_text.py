@@ -9,8 +9,6 @@ from libs.rag import VectorIndex
 from libs.storage import NotesStorage, Note as FsNote
 from libs.db import models, NoteRepo, ChunkRepo
 from libs.storage.notes_storage import _load_yaml
-from libs.db import MetadataRepository
-from libs.core.models import Note as NoteModel, Chunk as ChunkModel
 
 
 
