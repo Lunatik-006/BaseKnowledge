@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import os
 
 from telegram.ext import Application
 
+from libs.core.settings import get_settings
+
 
 async def main() -> None:
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    base_url = os.getenv("PUBLIC_URL")
-    secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+    settings = get_settings()
+    token = settings.telegram_bot_token
+    base_url = settings.public_url
+    secret = settings.telegram_webhook_secret
     if not token or not base_url:
         raise RuntimeError("Missing TELEGRAM_BOT_TOKEN or PUBLIC_URL")
 
