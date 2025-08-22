@@ -135,7 +135,9 @@ def ingest_image() -> Dict[str, str]:
 def search(req: SearchRequest, uc: Search = Depends(search_uc)) -> Dict[str, Any]:
     try:
         answer_md, items = uc(req.query, req.k)
-        return {"answer_md": answer_md, "items": items}
+        # Filter out any missing fragments to return only existing notes
+        filtered_items = [item for item in items if item]
+        return {"answer_md": answer_md, "items": filtered_items}
     except Exception as exc:  # pragma: no cover - generic error
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
