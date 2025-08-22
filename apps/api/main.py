@@ -4,50 +4,27 @@ import os
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional, AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from telegram import Bot, Update
 
-# ---------------------------------------------------------------------------
-# Dependencies
-
-
-class DummyDB:
-    """Placeholder database connection."""
-
-    def __init__(self) -> None:
-        self.telegram_users: set[int] = set()
-
-    def save_telegram_user(self, user_id: int) -> None:
-        self.telegram_users.add(user_id)
-
-
-class DummyVectorIndex:
-    """Fallback in case real Milvus index is unavailable."""
-
-    def upsert_chunks(self, chunks: List[Dict[str, Any]]) -> None:  # pragma: no cover - stub
-        return None
-
-    def search(self, query_vec: List[float], k: int = 5) -> List[Dict[str, Any]]:  # pragma: no cover - stub
-        return []
-
-
-try:  # pragma: no cover - optional dependency
-    from libs.rag.vector_index import VectorIndex as RealVectorIndex
-except Exception:  # Milvus client may be missing
-    RealVectorIndex = None  # type: ignore
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.storage.notes_storage import NotesStorage, Note
 from libs.llm.replicate_client import ReplicateLLMClient
 from libs.llm.embeddings_provider import EmbeddingsProvider
+from libs.rag import VectorIndex
+from libs.usecases import IngestText, Search
+from libs.db import get_session, NoteRepo, ChunkRepo
 
 MAX_NOTE_LEN = 1000
 
-def get_db() -> DummyDB:
-    return DummyDB()
+
+# ---------------------------------------------------------------------------
+# Dependency factories
 
 
 def get_storage() -> NotesStorage:
@@ -55,13 +32,8 @@ def get_storage() -> NotesStorage:
     return NotesStorage(vault)
 
 
-def get_index() -> Any:
-    if RealVectorIndex is None:
-        return DummyVectorIndex()
-    try:
-        return RealVectorIndex()
-    except Exception:  # pragma: no cover - connection failure
-        return DummyVectorIndex()
+def get_index() -> VectorIndex:
+    return VectorIndex()
 
 
 def get_llm_client() -> ReplicateLLMClient:
@@ -72,48 +44,9 @@ def get_embeddings_provider() -> EmbeddingsProvider:
     return EmbeddingsProvider()
 
 
-# ---------------------------------------------------------------------------
-# Use cases (minimal stubs)
-
-
-class IngestText:
-    def __init__(
-        self,
-        storage: NotesStorage,
-        index: Any,
-        llm: ReplicateLLMClient,
-        embeddings: EmbeddingsProvider,
-        db: DummyDB,
-    ) -> None:
-        self.storage = storage
-        self.index = index
-        self.llm = llm
-        self.embeddings = embeddings
-        self.db = db
-
-    def __call__(self, payload: "IngestTextRequest") -> Dict[str, Any]:
-        # Minimal stub: save text as a note with generated slug
-        slug = f"note-{int(datetime.utcnow().timestamp())}"
-        note = Note(slug=slug, title="Auto note", tags=[], body=payload.text)
-        self.storage.save_note(note)
-        return {"notes": [{"id": slug, "title": note.title, "file_path": str(self.storage.notes_dir / f"{slug}.md")}]}
-
-
-class Search:
-    def __init__(
-        self,
-        index: Any,
-        llm: ReplicateLLMClient,
-        embeddings: EmbeddingsProvider,
-        db: DummyDB,
-    ) -> None:
-        self.index = index
-        self.llm = llm
-        self.embeddings = embeddings
-        self.db = db
-
-    def __call__(self, payload: "SearchRequest") -> Dict[str, Any]:
-        return {"answer_md": "", "items": []}
+async def db_session() -> AsyncIterator[AsyncSession]:
+    async with get_session() as session:
+        yield session
 
 
 # ---------------------------------------------------------------------------
@@ -141,32 +74,40 @@ app = FastAPI(title="BaseKnowledge API")
 
 # Factory dependencies for use cases -------------------------------------------------
 
-def ingest_text_uc(
+async def ingest_text_uc(
     storage: NotesStorage = Depends(get_storage),
-    index: Any = Depends(get_index),
+    index: VectorIndex = Depends(get_index),
     llm: ReplicateLLMClient = Depends(get_llm_client),
     emb: EmbeddingsProvider = Depends(get_embeddings_provider),
-    db: DummyDB = Depends(get_db),
+    session: AsyncSession = Depends(db_session),
 ) -> IngestText:
-    return IngestText(storage, index, llm, emb, db)
+    note_repo = NoteRepo(session)
+    chunk_repo = ChunkRepo(session)
+    return IngestText(llm, storage, emb, index, note_repo, chunk_repo)
 
 
 def search_uc(
-    index: Any = Depends(get_index),
+    storage: NotesStorage = Depends(get_storage),
+    index: VectorIndex = Depends(get_index),
     llm: ReplicateLLMClient = Depends(get_llm_client),
     emb: EmbeddingsProvider = Depends(get_embeddings_provider),
-    db: DummyDB = Depends(get_db),
 ) -> Search:
-    return Search(index, llm, emb, db)
+    return Search(llm, emb, index, storage)
 
 
 # Routes ---------------------------------------------------------------------
 
 
 @app.post("/ingest/text", status_code=status.HTTP_201_CREATED)
-def ingest_text(req: IngestTextRequest, uc: IngestText = Depends(ingest_text_uc)) -> JSONResponse:
+async def ingest_text(req: IngestTextRequest, uc: IngestText = Depends(ingest_text_uc)) -> JSONResponse:
     try:
-        result = uc(req)
+        notes = await uc(req.text)
+        result = {
+            "notes": [
+                {"id": n.id, "title": n.title, "file_path": n.file_path}
+                for n in notes
+            ]
+        }
         return JSONResponse(status_code=status.HTTP_201_CREATED, content=result)
     except Exception as exc:  # pragma: no cover - generic error
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
@@ -185,7 +126,8 @@ def ingest_image() -> Dict[str, str]:
 @app.post("/search")
 def search(req: SearchRequest, uc: Search = Depends(search_uc)) -> Dict[str, Any]:
     try:
-        return uc(req)
+        answer = uc(req.query, req.k)
+        return {"answer": answer}
     except Exception as exc:  # pragma: no cover - generic error
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
@@ -209,11 +151,10 @@ def export_zip(storage: NotesStorage = Depends(get_storage)) -> FileResponse:
 
 
 @app.post("/telegram/webhook/{secret}")
-def telegram_webhook(
+async def telegram_webhook(
     secret: str,
     payload: Dict[str, Any],
     uc: IngestText = Depends(ingest_text_uc),
-    db: DummyDB = Depends(get_db),
 ) -> Dict[str, str]:
     expected = os.getenv("TELEGRAM_WEBHOOK_SECRET")
     if expected and secret != expected:
@@ -227,15 +168,10 @@ def telegram_webhook(
     if not msg or not msg.forward_date or not msg.text:
         return {"status": "ignored"}
 
-    user_id = msg.from_user.id if msg.from_user else None
-    if user_id is not None:
-        db.save_telegram_user(user_id)
-
     text = msg.text
     parts = [text] if len(text) <= MAX_NOTE_LEN else [text[i : i + MAX_NOTE_LEN] for i in range(0, len(text), MAX_NOTE_LEN)]
     for part in parts:
-        req = IngestTextRequest(text=part, author=str(user_id) if user_id else None, channel="telegram")
-        uc(req)
+        await uc(part)
 
     return {"status": "ok"}
 
