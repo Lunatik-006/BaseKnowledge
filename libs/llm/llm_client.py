@@ -8,8 +8,8 @@ class LLMClient(ABC):
     """Abstract interface for language model interactions."""
 
     @abstractmethod
-    def generate_structured_notes(self, text: str) -> Dict[str, Any]:
-        """Return structured insights extracted from raw text."""
+    def generate_structured_notes(self, text: str) -> List[Dict[str, Any]]:
+        """Return list of structured insights extracted from raw text."""
 
     @abstractmethod
     def render_note_markdown(self, insight: Dict[str, Any]) -> str:
