@@ -154,7 +154,20 @@ def get_note(note_id: str, storage: NotesStorage = Depends(get_storage)) -> Dict
         note = storage.read_note(note_id)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
-    return {"id": note.slug, "title": note.title, "content": note.body}
+    return {
+        "id": note.slug,
+        "title": note.title,
+        "content": note.body,
+        "metadata": {
+            "tags": note.tags,
+            "created": note.created,
+            "source_url": note.source_url,
+            "author": note.author,
+            "dt": note.dt,
+            "topic_id": note.topic_id,
+            "channel": note.channel,
+        },
+    }
 
 
 @app.get("/export/zip")
