@@ -108,18 +108,44 @@ class IngestText:
 
             title = front.get("title") or insight.get("title", "untitled")
             tags = front.get("tags") or insight.get("tags", [])
-            meta = front.get("meta") or insight.get("meta", {})
+
+            fm_meta = {k: v for k, v in front.items() if k not in {"title", "tags"}}
+            meta = {**insight.get("meta", {}), **fm_meta}
+
             slug = _slugify(title)
 
-            fs_note = FsNote(slug=slug, title=title, tags=tags, meta=meta, body=body)
+            fs_note = FsNote(
+                slug=slug,
+                title=title,
+                tags=tags,
+                body=body,
+                created=meta.get("created"),
+                source_url=meta.get("source_url"),
+                author=meta.get("source_author"),
+                dt=meta.get("source_dt"),
+                topic_id=meta.get("topic_id"),
+                channel=meta.get("source_channel"),
+            )
             self.storage.save_note(fs_note)
+
+            meta_mapping = {
+                "source_author": "author",
+                "source_dt": "dt",
+                "source_channel": "channel",
+            }
+            allowed_fields = {"source_url", "author", "dt", "topic_id", "channel"}
+            db_meta: Dict[str, Any] = {}
+            for key, value in meta.items():
+                mapped = meta_mapping.get(key, key)
+                if mapped in allowed_fields:
+                    db_meta[mapped] = value
 
             note = await self.note_repo.create(
                 id=slug,
                 title=title,
                 file_path=str(self.storage.notes_dir / f"{slug}.md"),
                 tags=tags,
-                **meta,
+                **db_meta,
             )
 
             chunk_texts = _chunk_text(body)

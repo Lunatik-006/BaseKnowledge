@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from collections import defaultdict
 import re
 from zipfile import ZipFile
@@ -15,8 +15,13 @@ class Note:
     slug: str
     title: str
     tags: List[str]
-    meta: Dict[str, Any] = field(default_factory=dict)
     body: str = ""
+    created: Optional[str] = None
+    source_url: Optional[str] = None
+    author: Optional[str] = None
+    dt: Optional[str] = None
+    topic_id: Optional[str] = None
+    channel: Optional[str] = None
 
 
 class NotesStorage:
@@ -57,8 +62,13 @@ class NotesStorage:
             slug=slug,
             title=front.get("title", ""),
             tags=front.get("tags", []),
-            meta=front.get("meta", {}),
             body=body.rstrip(),
+            created=front.get("created"),
+            source_url=front.get("source_url"),
+            author=front.get("author"),
+            dt=front.get("dt"),
+            topic_id=front.get("topic_id"),
+            channel=front.get("channel"),
         )
 
     def list_notes(self) -> List[Note]:
@@ -78,9 +88,20 @@ class NotesStorage:
     # ------------------------------------------------------------------
     # helpers
     def _write_note_file(self, note: Note) -> None:
-        front = {"title": note.title, "tags": note.tags}
-        if note.meta:
-            front["meta"] = note.meta
+        front: Dict[str, Any] = {"title": note.title, "tags": note.tags}
+        if note.created:
+            front["created"] = note.created
+        if note.source_url:
+            front["source_url"] = note.source_url
+        if note.author:
+            front["author"] = note.author
+        if note.dt:
+            front["dt"] = note.dt
+        if note.topic_id:
+            front["topic_id"] = note.topic_id
+        if note.channel:
+            front["channel"] = note.channel
+
         fm = _dump_yaml(front)
         path = self.notes_dir / f"{note.slug}.md"
         content = f"---\n{fm}\n---\n\n{note.body.rstrip()}\n"
