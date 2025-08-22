@@ -28,8 +28,8 @@ MAX_NOTE_LEN = 1000
 
 
 def get_storage() -> NotesStorage:
-    vault = Path("/tmp/vault")
-    return NotesStorage(vault)
+    vault_dir = Path(os.getenv("VAULT_DIR", "/tmp/vault"))
+    return NotesStorage(vault_dir)
 
 
 def get_index() -> VectorIndex:
