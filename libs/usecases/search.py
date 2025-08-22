@@ -26,7 +26,7 @@ class Search:
         self.storage = storage
 
     # ------------------------------------------------------------------
-    def __call__(self, query: str, k: int = 5) -> str:
+    def __call__(self, query: str, k: int = 5) -> tuple[str, List[Dict[str, str]]]:
         query_vec = self.embeddings.embed_texts([query])[0]
         hits = self.index.search(query_vec, k)
         fragments: List[Dict[str, str]] = []
@@ -43,4 +43,5 @@ class Search:
                     "snippet": snippet,
                 }
             )
-        return self.llm.answer_from_context(query, fragments)
+        answer = self.llm.answer_from_context(query, fragments)
+        return answer, fragments

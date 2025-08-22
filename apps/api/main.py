@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import os
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, AsyncIterator
+from typing import Any, Dict, Optional, AsyncIterator, List
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
@@ -13,7 +12,7 @@ from telegram import Bot, Update
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from libs.storage.notes_storage import NotesStorage, Note
+from libs.storage.notes_storage import NotesStorage
 from libs.llm.replicate_client import ReplicateLLMClient
 from libs.llm.embeddings_provider import EmbeddingsProvider
 from libs.rag import VectorIndex
@@ -126,10 +125,16 @@ def ingest_image() -> Dict[str, str]:
 @app.post("/search")
 def search(req: SearchRequest, uc: Search = Depends(search_uc)) -> Dict[str, Any]:
     try:
-        answer = uc(req.query, req.k)
-        return {"answer": answer}
+        answer_md, items = uc(req.query, req.k)
+        return {"answer_md": answer_md, "items": items}
     except Exception as exc:  # pragma: no cover - generic error
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
+@app.get("/notes")
+def list_notes(storage: NotesStorage = Depends(get_storage)) -> List[Dict[str, str]]:
+    notes = storage.list_notes()
+    return [{"id": n.slug, "title": n.title} for n in notes]
 
 
 @app.get("/notes/{note_id}")
@@ -138,7 +143,7 @@ def get_note(note_id: str, storage: NotesStorage = Depends(get_storage)) -> Dict
         note = storage.read_note(note_id)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
-    return asdict(note)
+    return {"id": note.slug, "title": note.title, "content": note.body}
 
 
 @app.get("/export/zip")
