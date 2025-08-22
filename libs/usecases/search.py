@@ -31,7 +31,11 @@ class Search:
         hits = self.index.search(query_vec, k)
         fragments: List[Dict[str, str]] = []
         for hit in hits:
-            note = self.storage.read_note(hit["note_id"])
+            try:
+                note = self.storage.read_note(hit["note_id"])
+            except FileNotFoundError:
+                # Skip hits pointing to notes that no longer exist
+                continue
             snippet = hit["text"]
             if len(snippet) > MAX_SNIPPET_LEN:
                 snippet = snippet[: MAX_SNIPPET_LEN - 3].rstrip() + "..."

@@ -156,3 +156,29 @@ def test_search_returns_answer(tmp_path: Path) -> None:
     assert fragments_arg[0]["snippet"].endswith("...")
     assert len(fragments_arg[0]["snippet"]) <= 200
     assert answer == "answer"
+
+
+def test_search_skips_missing_files(tmp_path: Path) -> None:
+    """Search should ignore hits referencing missing note files."""
+    vault = tmp_path / "vault"
+    storage = NotesStorage(vault)
+
+    llm = MagicMock()
+    llm.answer_from_context.return_value = "answer"
+
+    embedder = MagicMock()
+    embedder.embed_texts.return_value = [[0.0, 0.1, 0.2]]
+
+    index = MagicMock()
+    # Return a hit referencing a non-existent note id
+    index.search.return_value = [{"chunk_id": 1, "note_id": "missing", "pos": 0, "text": "snippet"}]
+
+    searcher = Search(llm, embedder, index, storage)
+
+    answer, fragments = searcher("query")
+
+    # Ensure the LLM was called even with no fragments
+    llm.answer_from_context.assert_called_once_with("query", [])
+    assert answer == "answer"
+    # Fragments list should be empty since the note was missing
+    assert fragments == []
