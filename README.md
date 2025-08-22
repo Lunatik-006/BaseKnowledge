@@ -5,6 +5,9 @@
 - Docker Compose
 - `REPLICATE_API_TOKEN`
 - `TELEGRAM_BOT_TOKEN`
+- Python-зависимости образа API: `fastapi`, `uvicorn[standard]`, `python-telegram-bot`,
+  `replicate`, `requests`, `sqlalchemy`, `pydantic-settings`, `psycopg[binary]`,
+  `pymilvus`, `alembic`
 
 ## Запуск через Docker Compose
 1. Скопируйте `.env.example` в `.env` и заполните переменные.
