@@ -44,9 +44,9 @@ def test_call_timeout(monkeypatch):
 
 def test_generate_structured_notes(monkeypatch):
     client = make_client()
-    expected = {"insights": []}
+    expected = {"insights": [{"title": "t"}]}
     monkeypatch.setattr(client, "_call", lambda m, msgs: json.dumps(expected))
-    assert client.generate_structured_notes("text") == expected
+    assert client.generate_structured_notes("text") == expected["insights"]
 
 
 def test_render_note_markdown(monkeypatch):

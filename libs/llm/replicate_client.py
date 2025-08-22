@@ -153,7 +153,7 @@ class ReplicateLLMClient(LLMClient):
         except (KeyError, ValueError) as exc:
             raise LLMClientError("Unexpected response from Replicate") from exc
 
-    def generate_structured_notes(self, text: str) -> Dict[str, Any]:
+    def generate_structured_notes(self, text: str) -> List[Dict[str, Any]]:
         user_prompt = PROMPT_INSIGHTS_USER.format(raw_text=text)
         content = self._call(
             "openai/gpt-5-structured",
@@ -162,7 +162,7 @@ class ReplicateLLMClient(LLMClient):
                 {"role": "user", "content": user_prompt},
             ],
         )
-        return json.loads(content)
+        return json.loads(content)["insights"]
 
     def render_note_markdown(self, insight: Dict[str, Any]) -> str:
         user_prompt = PROMPT_NOTE_USER.format(
