@@ -61,6 +61,11 @@ class NotesStorage:
             body=body.rstrip(),
         )
 
+    def list_notes(self) -> List[Note]:
+        """Return all notes stored in the vault."""
+
+        return list(self._load_all_notes().values())
+
     def export_zip(self, output_path: Path) -> None:
         """Export entire vault as ZIP archive."""
 
