@@ -13,7 +13,17 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     llm = MagicMock()
 
     llm.generate_structured_notes.return_value = [
-        {"title": "My Note", "tags": ["x"], "meta": {}}
+        {
+            "title": "My Note",
+            "tags": ["x"],
+            "meta": {
+                "source_url": "http://example.com",
+                "source_author": "Alice",
+                "source_dt": "2024-02-02",
+                "topic_id": "topic42",
+                "source_channel": "telegram",
+            },
+        }
     ]
     llm.render_note_markdown.return_value = (
         "---\n"
@@ -30,7 +40,10 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     index = MagicMock()
     note_repo = AsyncMock(spec=NoteRepo)
     note_repo.create.return_value = models.Note(
-        id="my-note", title="My Note", tags=["x"], file_path=str(storage.notes_dir / "my-note.md")
+        id="my-note",
+        title="My Note",
+        tags=["x"],
+        file_path=str(storage.notes_dir / "my-note.md"),
     )
     chunk_repo = AsyncMock(spec=ChunkRepo)
     chunk_repo.create.return_value = models.Chunk(
@@ -50,6 +63,19 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     content = note_path.read_text()
     assert content.count("---") == 2
     assert content.endswith("Body text\n")
+    fm = content.split("---")[1]
+    assert "author: Alice" in fm
+    assert "dt: 2024-02-02" in fm
+    assert "source_url: http://example.com" in fm
+    assert "topic_id: topic42" in fm
+    assert "channel: telegram" in fm
+
+    kwargs = note_repo.create.call_args.kwargs
+    assert kwargs["author"] == "Alice"
+    assert kwargs["dt"] == "2024-02-02"
+    assert kwargs["source_url"] == "http://example.com"
+    assert kwargs["topic_id"] == "topic42"
+    assert kwargs["channel"] == "telegram"
 
 
 def test_ingest_text_handles_no_insights(tmp_path: Path) -> None:
@@ -105,7 +131,7 @@ def test_ingest_text_russian_title(tmp_path: Path) -> None:
 def test_search_returns_answer(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     storage = NotesStorage(vault)
-    storage.save_note(Note(slug="n1", title="Note 1", tags=[], meta={}, body="body"))
+    storage.save_note(Note(slug="n1", title="Note 1", tags=[], body="body"))
 
     llm = MagicMock()
     llm.answer_from_context.return_value = "answer"
