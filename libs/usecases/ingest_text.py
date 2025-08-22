@@ -92,6 +92,8 @@ class IngestText:
     # ------------------------------------------------------------------
     async def __call__(self, text: str) -> List[models.Note]:
         insights: List[Dict[str, Any]] = self.llm.generate_structured_notes(text)
+        if not insights:
+            return []
         notes: List[models.Note] = []
         for insight in insights:
             rendered = self.llm.render_note_markdown(insight)
