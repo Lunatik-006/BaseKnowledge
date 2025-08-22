@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """Database setup for SQLAlchemy with async psycopg driver."""
 
-import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -14,11 +13,10 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
+from libs.core.settings import get_settings
 
-DATABASE_URL = os.getenv(
-    "POSTGRES_URI",
-    "postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
-)
+settings = get_settings()
+DATABASE_URL = settings.postgres_uri
 
 
 class Base(DeclarativeBase):

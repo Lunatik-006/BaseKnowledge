@@ -1,4 +1,3 @@
-import os
 from typing import List, Dict, Any
 
 from pymilvus import (
@@ -10,13 +9,19 @@ from pymilvus import (
     utility,
 )
 
+from libs.core.settings import get_settings
+
 
 class VectorIndex:
     """Wrapper around Milvus vector store."""
 
     def __init__(self, uri: str | None = None, dim: int = 768, create_notes_meta: bool = False) -> None:
         self.dim = dim
-        self.uri = uri or os.getenv("MILVUS_URI")
+        if uri:
+            self.uri = uri
+        else:
+            settings = get_settings()
+            self.uri = settings.milvus_uri
         if not self.uri:
             raise RuntimeError("MILVUS_URI is not set")
 

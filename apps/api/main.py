@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, AsyncIterator, List
@@ -12,6 +11,7 @@ from telegram import Bot, Update
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from libs.core.settings import get_settings
 from libs.storage.notes_storage import NotesStorage
 from libs.llm.replicate_client import ReplicateLLMClient
 from libs.llm.embeddings_provider import EmbeddingsProvider
@@ -27,7 +27,8 @@ MAX_NOTE_LEN = 1000
 
 
 def get_storage() -> NotesStorage:
-    vault_dir = Path(os.getenv("VAULT_DIR", "/tmp/vault"))
+    settings = get_settings()
+    vault_dir = Path(settings.vault_dir)
     return NotesStorage(vault_dir)
 
 
@@ -169,11 +170,12 @@ async def telegram_webhook(
     payload: Dict[str, Any],
     uc: IngestText = Depends(ingest_text_uc),
 ) -> Dict[str, str]:
-    expected = os.getenv("TELEGRAM_WEBHOOK_SECRET")
+    settings = get_settings()
+    expected = settings.telegram_webhook_secret
     if expected and secret != expected:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid secret")
 
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    token = settings.telegram_bot_token
     bot = Bot(token) if token else None
     update = Update.de_json(payload, bot)
     msg = update.message
