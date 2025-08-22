@@ -57,14 +57,16 @@ def test_ingest_text_handles_no_insights(tmp_path: Path) -> None:
     storage = NotesStorage(vault)
 
     llm = MagicMock()
-    llm.generate_structured_notes.return_value = {"insights": []}
+    llm.generate_structured_notes.return_value = []
 
     embedder = MagicMock()
     index = MagicMock()
-    repo = MetadataRepository()
+    note_repo = AsyncMock(spec=NoteRepo)
+    chunk_repo = AsyncMock(spec=ChunkRepo)
 
-    ingest = IngestText(llm, storage, embedder, index, repo)
-    result = ingest("raw text")
+    ingest = IngestText(llm, storage, embedder, index, note_repo, chunk_repo)
+    import asyncio
+    result = asyncio.run(ingest("raw text"))
 
     assert result == []
     llm.render_note_markdown.assert_not_called()
@@ -87,10 +89,15 @@ def test_ingest_text_russian_title(tmp_path: Path) -> None:
     embedder.embed_texts.return_value = [[0.0, 0.1, 0.2]]
 
     index = MagicMock()
-    repo = MetadataRepository()
+    note_repo = AsyncMock(spec=NoteRepo)
+    note_repo.create.return_value = models.Note(
+        id="privet-mir", title="Привет Мир", tags=[], file_path=str(storage.notes_dir / "privet-mir.md")
+    )
+    chunk_repo = AsyncMock(spec=ChunkRepo)
 
-    ingest = IngestText(llm, storage, embedder, index, repo)
-    ingest("raw text")
+    ingest = IngestText(llm, storage, embedder, index, note_repo, chunk_repo)
+    import asyncio
+    asyncio.run(ingest("raw text"))
 
     assert (vault / "10_Notes" / "privet-mir.md").exists()
 
@@ -113,13 +120,13 @@ def test_search_returns_answer(tmp_path: Path) -> None:
     ]
 
     searcher = Search(llm, embedder, index, storage)
-    result = searcher("query")
+    answer, fragments = searcher("query")
 
     embedder.embed_texts.assert_called_once_with(["query"])
     index.search.assert_called_once()
     llm.answer_from_context.assert_called_once()
     args, _ = llm.answer_from_context.call_args
-    fragments = args[1]
-    assert fragments[0]["snippet"].endswith("...")
-    assert len(fragments[0]["snippet"]) <= 200
-    assert result == "answer"
+    fragments_arg = args[1]
+    assert fragments_arg[0]["snippet"].endswith("...")
+    assert len(fragments_arg[0]["snippet"]) <= 200
+    assert answer == "answer"
