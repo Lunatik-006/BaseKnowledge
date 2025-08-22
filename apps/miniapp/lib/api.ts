@@ -17,17 +17,22 @@ export async function getNote(id: string): Promise<{id: string; title: string; c
 }
 
 export async function searchNotes(query: string): Promise<Array<{id: string; title: string}>> {
-  const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
+  const res = await fetch(`${API_BASE_URL}/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
   if (!res.ok) {
     throw new Error('Search request failed');
   }
-  return res.json();
+  const data = await res.json();
+  return data.items.map((item: any) => ({ id: item.note_id, title: item.title }));
 }
 
-export function getZipUrl(id: string): string {
-  return `${API_BASE_URL}/notes/${id}/zip`;
+export function getZipUrl(_id: string): string {
+  return `${API_BASE_URL}/export/zip`;
 }
 
 export function getObsidianUrl(id: string): string {
-  return `obsidian://open?path=${encodeURIComponent(id)}`;
+  return `obsidian://${id}`;
 }
