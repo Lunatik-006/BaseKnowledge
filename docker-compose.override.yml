@@ -8,3 +8,4 @@ services:
   milvus:
     ports:
       - "19531:19530"
+      - "9092:9091"
