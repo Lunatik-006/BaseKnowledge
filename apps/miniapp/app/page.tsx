@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { getNotes } from '@/lib/api';
 
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   const notes = await getNotes();
   return (
