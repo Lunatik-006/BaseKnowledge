@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
-import WebApp from '@twa-dev/sdk';
 
 export default function TelegramInit() {
   useEffect(() => {
-    WebApp.ready();
+    import('@twa-dev/sdk').then((mod) => {
+      mod.default.ready();
+    });
   }, []);
   return null;
 }
