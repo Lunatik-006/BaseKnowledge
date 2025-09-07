@@ -37,8 +37,20 @@ services:
   milvus:
     image: milvusdb/milvus:v2.3.10
     restart: unless-stopped
+    # Milvus requires an explicit command to start the standalone server.
+    # Without it the container only launches `tini` which immediately exits
+    # and Docker keeps restarting the service (see README for details).
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      MINIO_USE_EMBED: "true"
+      MINIO_DATA_DIR: /var/lib/milvus/minio
+      MILVUS_LOGS_PATH: /var/lib/milvus/logs
+      MILVUS_DATA_PATH: /var/lib/milvus/data
     ports:
       - "19530:19530"
+      - "9091:9091"
     volumes:
       - milvus_data:/var/lib/milvus
 volumes:
