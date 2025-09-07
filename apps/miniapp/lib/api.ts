@@ -1,11 +1,16 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export async function getNotes(): Promise<Array<{id: string; title: string}>> {
-  const res = await fetch(`${API_BASE_URL}/notes`);
-  if (!res.ok) {
-    throw new Error('Failed to fetch notes');
+  try {
+    const res = await fetch(`${API_BASE_URL}/notes`);
+    if (!res.ok) {
+      throw new Error('Failed to fetch notes');
+    }
+    return res.json();
+  } catch (err) {
+    console.error('Error fetching notes', err);
+    return [];
   }
-  return res.json();
 }
 
 export async function getNote(id: string): Promise<{id: string; title: string; content: string}> {
