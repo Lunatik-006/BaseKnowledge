@@ -24,6 +24,13 @@ class VectorIndex:
             self.uri = settings.milvus_uri
         if not self.uri:
             raise RuntimeError("MILVUS_URI is not set")
+        # pymilvus requires a URI with an explicit scheme. Users may provide
+        # just "host:port" in the environment which results in a connection
+        # error.  To be more forgiving, automatically prepend "http://" when
+        # no scheme is supplied so that both "http://milvus:19530" and
+        # "milvus:19530" work the same.
+        if not self.uri.startswith("http://") and not self.uri.startswith("https://"):
+            self.uri = f"http://{self.uri}"
 
         connections.connect("default", uri=self.uri)
 
