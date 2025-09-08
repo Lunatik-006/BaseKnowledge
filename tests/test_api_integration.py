@@ -7,6 +7,40 @@ def test_ingest_text_endpoint(client):
     assert note["content"] == "hello"
 
 
+def test_ingest_text_missing_milvus_uri(client, monkeypatch):
+    from types import SimpleNamespace
+    from apps.api import main
+
+    # Ensure real use case is used and avoid DB connections
+    main.app.dependency_overrides.pop(main.ingest_text_uc, None)
+
+    async def dummy_db_session():
+        yield None
+
+    main.app.dependency_overrides[main.db_session] = dummy_db_session
+
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(
+            vault_dir="/tmp/vault",
+            milvus_uri="",
+            replicate_api_token="",
+            telegram_bot_token="",
+            public_url="",
+            telegram_webhook_secret="",
+            postgres_uri="postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
+        ),
+    )
+
+    response = client.post("/ingest/text", json={"text": "hello"})
+    assert response.status_code == 500
+    assert (
+        response.json()["detail"]
+        == "MILVUS_URI is not configured. Реальный адрес http://milvus:19530"
+    )
+
+
 def test_search_endpoint(client):
     response = client.post("/search", json={"query": "hello"})
     assert response.status_code == 200
