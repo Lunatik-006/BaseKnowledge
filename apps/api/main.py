@@ -33,7 +33,14 @@ def get_storage() -> NotesStorage:
 
 
 def get_index() -> VectorIndex:
-    return VectorIndex()
+    try:
+        return VectorIndex()
+    except RuntimeError as exc:
+        real_uri = "http://milvus:19530"
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"MILVUS_URI is not configured. Реальный адрес {real_uri}",
+        ) from exc
 
 
 def get_llm_client() -> ReplicateLLMClient:
