@@ -29,6 +29,7 @@ class NotesStorage:
 
     def __init__(self, vault_path: Path) -> None:
         self.vault_path = Path(vault_path)
+        self.vault_path.mkdir(parents=True, exist_ok=True)
         self.notes_dir = self.vault_path / "10_Notes"
         self.moc_dir = self.vault_path / "00_MOC"
         self.moc_file = self.moc_dir / "topics_index.md"
