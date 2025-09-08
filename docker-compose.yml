@@ -46,6 +46,9 @@ services:
       ETCD_DATA_DIR: /var/lib/milvus/etcd
       MINIO_USE_EMBED: "true"
       MINIO_DATA_DIR: /var/lib/milvus/minio
+      # Enable embedded Pulsar message queue to ensure datacoord/querycoord start
+      PULSAR_USE_EMBED: "true"
+      PULSAR_DATA_DIR: /var/lib/milvus/pulsar
       MILVUS_LOGS_PATH: /var/lib/milvus/logs
       MILVUS_DATA_PATH: /var/lib/milvus/data
     ports:
