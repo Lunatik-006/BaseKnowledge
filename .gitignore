@@ -24,4 +24,6 @@ baseenv
 # Miscellaneous
 .DS_Store
 *.tgz
+__pycache__/
+*.pyc
 
