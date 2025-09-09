@@ -31,7 +31,7 @@ class _DummyUpdate:
 sys.modules.setdefault("telegram", SimpleNamespace(Bot=_DummyBot, Update=_DummyUpdate))
 sys.modules.setdefault("replicate", SimpleNamespace(run=lambda *args, **kwargs: None))
 
-from apps.api.main import app, get_storage, ingest_text_uc, search_uc
+from apps.api.main import app, get_storage, ingest_text_uc, search_uc, current_user
 from libs.storage import NotesStorage, Note
 
 
@@ -53,6 +53,7 @@ def client(tmp_path):
     app.dependency_overrides[get_storage] = lambda: storage
     app.dependency_overrides[ingest_text_uc] = lambda: DummyIngestText(storage)
     app.dependency_overrides[search_uc] = lambda: MagicMock(return_value=("answer", []))
+    app.dependency_overrides[current_user] = lambda: SimpleNamespace(id=1, telegram_id=1)
 
     with TestClient(app) as test_client:
         yield test_client
