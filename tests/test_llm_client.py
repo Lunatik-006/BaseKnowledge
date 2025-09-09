@@ -13,7 +13,8 @@ from libs.llm.replicate_client import ReplicateLLMClient, LLMClientError
 
 
 def make_client() -> ReplicateLLMClient:
-    return ReplicateLLMClient(settings=DummySettings())
+    prompts_file = Path(__file__).resolve().parents[1] / "config" / "prompts.yaml"
+    return ReplicateLLMClient(settings=DummySettings(), prompts_path=prompts_file)
 
 
 def test_call_success(monkeypatch):

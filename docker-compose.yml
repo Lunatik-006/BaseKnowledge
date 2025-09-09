@@ -12,6 +12,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - ./config/prompts.yaml:/app/config/prompts.yaml:ro
   miniapp:
     build:
       context: .
