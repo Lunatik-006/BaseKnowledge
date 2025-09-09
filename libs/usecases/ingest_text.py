@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from typing import Any, Dict, List
+import json
 
 from libs.llm import LLMClient, EmbeddingsProvider
 from libs.rag import VectorIndex
@@ -94,6 +95,31 @@ class IngestText:
         insights: List[Dict[str, Any]] = self.llm.generate_structured_notes(text)
         if not insights:
             return []
+
+        topics_info = self.llm.group_topics(insights)
+        insight_map = {ins.get("id"): ins for ins in insights if ins.get("id")}
+        id_to_topic: Dict[str, str] = {}
+        for topic in topics_info.get("topics", []):
+            for iid in topic.get("insight_ids", []):
+                id_to_topic[iid] = topic.get("topic_id")
+
+        for ins in insights:
+            topic_id = id_to_topic.get(ins.get("id"))
+            if topic_id:
+                ins.setdefault("meta", {})["topic_id"] = topic_id
+
+        all_titles = [i.get("title", "") for i in insights]
+        for ins in insights:
+            candidates = [t for t in all_titles if t != ins.get("title")]
+            related = self.llm.find_autolinks(
+                ins.get("title", ""),
+                ins.get("summary", ""),
+                candidates,
+            )
+            ins["see_also_candidates"] = related
+
+        self.storage.notes_dir.mkdir(parents=True, exist_ok=True)
+
         notes: List[models.Note] = []
         for insight in insights:
             rendered = self.llm.render_note_markdown(insight)
@@ -126,7 +152,7 @@ class IngestText:
                 topic_id=meta.get("topic_id"),
                 channel=meta.get("source_channel"),
             )
-            self.storage.save_note(fs_note)
+            self.storage._write_note_file(fs_note)
 
             meta_mapping = {
                 "source_author": "author",
@@ -165,4 +191,30 @@ class IngestText:
             if chunks_for_index:
                 self.index.upsert_chunks(chunks_for_index)
             notes.append(note)
+        topics_for_moc = []
+        for topic in topics_info.get("topics", []):
+            notes_list = []
+            for iid in topic.get("insight_ids", []):
+                ins = insight_map.get(iid)
+                if ins:
+                    notes_list.append(
+                        {
+                            "title": ins.get("title", ""),
+                            "summary": ins.get("summary", ""),
+                        }
+                    )
+            topics_for_moc.append(
+                {
+                    "topic_id": topic.get("topic_id"),
+                    "title": topic.get("title"),
+                    "desc": topic.get("desc"),
+                    "notes": notes_list,
+                }
+            )
+
+        topics_json = json.dumps({"topics": topics_for_moc}, ensure_ascii=False)
+        moc = self.llm.generate_moc(topics_json)
+        self.storage.moc_dir.mkdir(parents=True, exist_ok=True)
+        self.storage.moc_file.write_text(moc.rstrip() + "\n", encoding="utf-8")
+
         return notes
