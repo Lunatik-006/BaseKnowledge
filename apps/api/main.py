@@ -64,9 +64,19 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 async def current_user(
     init_data: str | None = Header(None, alias="X-Telegram-Init-Data"),
     init_data_q: str | None = Query(None, alias="initData"),
+    bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
     session: AsyncSession = Depends(db_session),
 ) -> models.User:
-    """Validate Telegram initData and return associated user."""
+    """Validate request and return associated user."""
+    settings = get_settings()
+    if bot_api_token and bot_api_token == settings.bot_api_token:
+        repo = UserRepo(session)
+        service_id = 0
+        user = await repo.get_by_telegram(service_id)
+        if not user:
+            user = await repo.create(service_id)
+        return user
+
     raw = init_data or init_data_q
     if not raw:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Missing initData")
@@ -77,7 +87,6 @@ async def current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid initData")
 
     check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
-    settings = get_settings()
     secret_key = hmac.new(
         key=b"WebAppData",
         msg=settings.telegram_bot_token.encode(),

@@ -18,6 +18,7 @@ BaseKnowledge — сервис для структурирования личн�
 - Docker Compose
 - `REPLICATE_API_TOKEN` — токен для LLM из replicate.com
 - `TELEGRAM_BOT_TOKEN` — токен Telegram‑бота
+- `BOT_API_TOKEN` — сервисный токен для запросов от бота
 - Python-зависимости образа API: `fastapi`, `uvicorn[standard]`, `python-telegram-bot`, `replicate`, `requests`, `sqlalchemy`, `pydantic-settings`, `psycopg[binary]`, `pymilvus`, `alembic`
 
 ## Развёртывание на Ubuntu 24.04 через Docker Compose
