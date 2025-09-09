@@ -43,9 +43,9 @@ services:
     # and Docker keeps restarting the service (see README for details).
     command: ["milvus", "run", "standalone"]
     environment:
-      ETCD_USE_EMBEDDED: "true"
+      ETCD_USE_EMBED: "true"
       ETCD_DATA_DIR: /var/lib/milvus/etcd
-      MINIO_USE_EMBEDDED: "true"
+      COMMON_STORAGETYPE: local
       MINIO_DATA_DIR: /var/lib/milvus/minio
       MILVUS_LOGS_PATH: /var/lib/milvus/logs
       MILVUS_DATA_PATH: /var/lib/milvus/data
@@ -57,8 +57,8 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9091/healthz || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 3s
+      retries: 6
 volumes:
   postgres_data:
   milvus_data:
