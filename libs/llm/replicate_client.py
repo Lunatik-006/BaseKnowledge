@@ -164,6 +164,20 @@ class ReplicateLLMClient(LLMClient):
         )
         return json.loads(content)["insights"]
 
+    def group_topics(self, insights: List[Dict[str, Any]]) -> Dict[str, Any]:
+        lines = [
+            f"{i.get('id')}\t{i.get('title')}\t{i.get('summary')}" for i in insights
+        ]
+        user_prompt = PROMPT_TOPICS_USER.format(insights="\n".join(lines))
+        content = self._call(
+            "openai/gpt-5-structured",
+            [
+                {"role": "system", "content": PROMPT_TOPICS_SYSTEM},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return json.loads(content)
+
     def render_note_markdown(self, insight: Dict[str, Any]) -> str:
         user_prompt = PROMPT_NOTE_USER.format(
             title=insight.get("title", ""),
@@ -185,6 +199,33 @@ class ReplicateLLMClient(LLMClient):
                 {"role": "user", "content": user_prompt},
             ],
         )
+
+    def generate_moc(self, topics_json: str) -> str:
+        user_prompt = PROMPT_MOC_USER.format(topics_json=topics_json)
+        return self._call(
+            "openai/gpt-5-structured",
+            [
+                {"role": "system", "content": PROMPT_MOC_SYSTEM},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+
+    def find_autolinks(
+        self, title: str, summary: str, candidates: List[str]
+    ) -> List[str]:
+        user_prompt = PROMPT_AUTOLINK_USER.format(
+            title=title,
+            summary=summary,
+            candidates=json.dumps(candidates, ensure_ascii=False),
+        )
+        content = self._call(
+            "openai/gpt-5-structured",
+            [
+                {"role": "system", "content": PROMPT_AUTOLINK_SYSTEM},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return json.loads(content).get("related_titles", [])
 
     def answer_from_context(
         self, query: str, fragments: List[Dict[str, str]]
