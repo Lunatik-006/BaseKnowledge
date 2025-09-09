@@ -135,14 +135,14 @@ class ReplicateLLMClient(LLMClient):
                 "Content-Type": "application/json",
             }
         )
-        self.api_url = "https://api.replicate.com/v1/chat/completions"
 
     def _call(self, model: str, messages: List[Dict[str, str]]) -> str:
-        payload = {"model": model, "messages": messages}
+        url = (
+            f"https://api.replicate.com/v1/models/{model}/chat/completions"
+        )
+        payload = {"messages": messages}
         try:
-            response = self.session.post(
-                self.api_url, json=payload, timeout=self.timeout
-            )
+            response = self.session.post(url, json=payload, timeout=self.timeout)
             response.raise_for_status()
             data = response.json()
             return data["choices"][0]["message"]["content"]
