@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, AsyncIterator, List
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, status
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from telegram import Bot, Update
@@ -17,7 +17,12 @@ from libs.llm.replicate_client import ReplicateLLMClient
 from libs.llm.embeddings_provider import EmbeddingsProvider
 from libs.rag import VectorIndex
 from libs.usecases import IngestText, Search
-from libs.db import get_session, NoteRepo, ChunkRepo
+from libs.db import get_session, NoteRepo, ChunkRepo, UserRepo, models
+
+import hmac
+import hashlib
+import json
+from urllib.parse import parse_qsl
 
 MAX_NOTE_LEN = 1000
 
@@ -54,6 +59,41 @@ def get_embeddings_provider() -> EmbeddingsProvider:
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with get_session() as session:
         yield session
+
+
+async def current_user(
+    init_data: str | None = Header(None, alias="X-Telegram-Init-Data"),
+    init_data_q: str | None = Query(None, alias="initData"),
+    session: AsyncSession = Depends(db_session),
+) -> models.User:
+    """Validate Telegram initData and return associated user."""
+    raw = init_data or init_data_q
+    if not raw:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Missing initData")
+
+    data = dict(parse_qsl(raw))
+    received_hash = data.pop("hash", None)
+    if not received_hash:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid initData")
+
+    check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+    settings = get_settings()
+    secret_key = hmac.new(
+        key=b"WebAppData",
+        msg=settings.telegram_bot_token.encode(),
+        digestmod=hashlib.sha256,
+    ).digest()
+    calculated = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calculated, received_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid initData")
+
+    user_data = json.loads(data["user"])
+    telegram_id = int(user_data["id"])
+    repo = UserRepo(session)
+    user = await repo.get_by_telegram(telegram_id)
+    if not user:
+        user = await repo.create(telegram_id)
+    return user
 
 
 # ---------------------------------------------------------------------------
@@ -105,11 +145,17 @@ def search_uc(
 # Routes ---------------------------------------------------------------------
 
 
+@app.post("/auth/telegram")
+async def auth_telegram(user: models.User = Depends(current_user)) -> Dict[str, Any]:
+    return {"id": user.id, "telegram_id": user.telegram_id}
+
+
 @app.post("/ingest/text", status_code=status.HTTP_201_CREATED)
 async def ingest_text(
     req: IngestTextRequest,
     uc: IngestText = Depends(ingest_text_uc),
     storage: NotesStorage = Depends(get_storage),
+    user: models.User = Depends(current_user),
 ) -> JSONResponse:
     try:
         notes = await uc(req.text)
@@ -139,7 +185,11 @@ def ingest_image() -> Dict[str, str]:
 
 
 @app.post("/search")
-def search(req: SearchRequest, uc: Search = Depends(search_uc)) -> Dict[str, Any]:
+def search(
+    req: SearchRequest,
+    uc: Search = Depends(search_uc),
+    user: models.User = Depends(current_user),
+) -> Dict[str, Any]:
     try:
         answer_md, items = uc(req.query, req.k)
         # Filter out any missing fragments to return only existing notes
@@ -150,13 +200,20 @@ def search(req: SearchRequest, uc: Search = Depends(search_uc)) -> Dict[str, Any
 
 
 @app.get("/notes")
-def list_notes(storage: NotesStorage = Depends(get_storage)) -> List[Dict[str, str]]:
+def list_notes(
+    storage: NotesStorage = Depends(get_storage),
+    user: models.User = Depends(current_user),
+) -> List[Dict[str, str]]:
     notes = storage.list_notes()
     return [{"id": n.slug, "title": n.title} for n in notes]
 
 
 @app.get("/notes/{note_id}")
-def get_note(note_id: str, storage: NotesStorage = Depends(get_storage)) -> Dict[str, Any]:
+def get_note(
+    note_id: str,
+    storage: NotesStorage = Depends(get_storage),
+    user: models.User = Depends(current_user),
+) -> Dict[str, Any]:
     try:
         note = storage.read_note(note_id)
     except FileNotFoundError:
@@ -178,7 +235,10 @@ def get_note(note_id: str, storage: NotesStorage = Depends(get_storage)) -> Dict
 
 
 @app.get("/export/zip")
-def export_zip(storage: NotesStorage = Depends(get_storage)) -> FileResponse:
+def export_zip(
+    storage: NotesStorage = Depends(get_storage),
+    user: models.User = Depends(current_user),
+) -> FileResponse:
     output = Path("/tmp/export.zip")
     storage.export_zip(output)
     if not output.exists():  # pragma: no cover - safety check

@@ -1,8 +1,15 @@
+import { getInitData } from './telegram';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+function authHeaders(extra: HeadersInit = {}): HeadersInit {
+  const initData = getInitData();
+  return initData ? { 'X-Telegram-Init-Data': initData, ...extra } : extra;
+}
 
 export async function getNotes(): Promise<Array<{id: string; title: string}>> {
   try {
-    const res = await fetch(`${API_BASE_URL}/notes`);
+    const res = await fetch(`${API_BASE_URL}/notes`, { headers: authHeaders() });
     if (!res.ok) {
       throw new Error('Failed to fetch notes');
     }
@@ -14,7 +21,7 @@ export async function getNotes(): Promise<Array<{id: string; title: string}>> {
 }
 
 export async function getNote(id: string): Promise<{id: string; title: string; content: string}> {
-  const res = await fetch(`${API_BASE_URL}/notes/${id}`);
+  const res = await fetch(`${API_BASE_URL}/notes/${id}`, { headers: authHeaders() });
   if (!res.ok) {
     throw new Error('Failed to fetch note');
   }
@@ -24,7 +31,7 @@ export async function getNote(id: string): Promise<{id: string; title: string; c
 export async function searchNotes(query: string): Promise<Array<{id: string; title: string}>> {
   const res = await fetch(`${API_BASE_URL}/search`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ query }),
   });
   if (!res.ok) {
@@ -40,7 +47,9 @@ export async function searchNotes(query: string): Promise<Array<{id: string; tit
 }
 
 export function getZipUrl(id: string): string {
-  return `${API_BASE_URL}/export/zip/${id}`;
+  const initData = getInitData();
+  const url = `${API_BASE_URL}/export/zip/${id}`;
+  return initData ? `${url}?initData=${encodeURIComponent(initData)}` : url;
 }
 
 export function getObsidianUrl(id: string): string {

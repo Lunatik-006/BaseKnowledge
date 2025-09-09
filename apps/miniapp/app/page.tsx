@@ -1,10 +1,16 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getNotes } from '@/lib/api';
 
-export const dynamic = 'force-dynamic';
+export default function HomePage() {
+  const [notes, setNotes] = useState<Array<{ id: string; title: string }>>([]);
 
-export default async function HomePage() {
-  const notes = await getNotes();
+  useEffect(() => {
+    getNotes().then(setNotes).catch(() => setNotes([]));
+  }, []);
+
   return (
     <main>
       <h1>Notes</h1>
