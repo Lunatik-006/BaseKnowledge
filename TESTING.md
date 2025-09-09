@@ -11,7 +11,7 @@
 2. Установите необходимые пакеты (совпадает с зависимостями из Dockerfile):
    ```bash
    pip install fastapi uvicorn[standard] python-telegram-bot replicate \
-       requests sqlalchemy pydantic-settings "psycopg[binary]" pymilvus alembic pytest
+       requests sqlalchemy pydantic-settings "psycopg[binary]" pymilvus==2.6.1 alembic pytest
    ```
 
 ## Переменные окружения
