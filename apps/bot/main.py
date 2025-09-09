@@ -73,8 +73,10 @@ async def ingest(text: str) -> List[dict]:
 
     settings = get_settings()
     url = f"{settings.public_url}/ingest/text"
+    token = settings.bot_api_token
+    headers = {"X-Bot-Api-Token": token} if token else None
     async with httpx.AsyncClient() as client:
-        response = await client.post(url, json={"text": text})
+        response = await client.post(url, json={"text": text}, headers=headers)
     response.raise_for_status()
     data = response.json()
     return data.get("notes", [])

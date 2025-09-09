@@ -113,3 +113,40 @@ def test_get_note_metadata(client):
     assert data["metadata"]["source_url"] == "http://example.com"
     assert data["metadata"]["dt"] == "2024-01-01"
     assert data["metadata"]["channel"] == "telegram"
+
+
+def test_bot_api_token(client, monkeypatch):
+    from types import SimpleNamespace
+    from apps.api import main
+
+    main.app.dependency_overrides.pop(main.current_user, None)
+
+    async def dummy_db_session():
+        yield None
+
+    main.app.dependency_overrides[main.db_session] = dummy_db_session
+
+    class DummyRepo:
+        def __init__(self, session):
+            self.session = session
+
+        async def get_by_telegram(self, telegram_id: int):
+            return None
+
+        async def create(self, telegram_id: int):
+            return SimpleNamespace(id=1, telegram_id=telegram_id)
+
+    monkeypatch.setattr(main, "UserRepo", DummyRepo)
+    monkeypatch.setattr(
+        main, "get_settings", lambda: SimpleNamespace(bot_api_token="s", telegram_bot_token="")
+    )
+
+    resp = client.post("/ingest/text", json={"text": "hello"})
+    assert resp.status_code == 401
+
+    resp = client.post(
+        "/ingest/text",
+        json={"text": "hello"},
+        headers={"X-Bot-Api-Token": "s"},
+    )
+    assert resp.status_code == 201
