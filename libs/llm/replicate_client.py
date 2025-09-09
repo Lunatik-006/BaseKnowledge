@@ -1,121 +1,14 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
+import yaml
 
 from libs.core.settings import Settings, get_settings
 from .llm_client import LLMClient
-
-
-# Prompts from Technical Specification sections 8.1-8.6
-PROMPT_INSIGHTS_SYSTEM = """Ты — редактор знаний. Выделяй "чистое знание" из входного текста разной длины:
-— короткие посты: 1–3 компактных insights;
-— длинные тексты: 5–30 insights, объединённых по смыслу.
-Каждый insight — атомная единица знания (1 мысль/правило/шаг).
-Удаляй рекламу/воду, сохраняй важные caveats.
-
-Строго верни JSON по схеме:
-{
-"insights": [
-{
-"id": "i-<uuid-like>",
-"title": "≤80 символов",
-"summary": "1–3 предложения сути",
-"bullets": ["атомный тезис 1", "атомный тезис 2", "..."],
-"tags": ["до 5 коротких тегов"],
-"confidence": 0.0..1.0
-},
-]
-}
-Никаких комментариев вне JSON.
-"""
-
-PROMPT_INSIGHTS_USER = """Текст:
-<<<
-{raw_text}
-
-> > >
-
-Метаданные (опц): source_url={{{{URL}}}}, author={{{{AUTHOR}}}}, dt={{{{DATETIME}}}}, channel={{{{CHANNEL}}}}
-Задача: верни JSON по схеме. Если текста мало — верни 1–2 insights.
-"""
-
-PROMPT_TOPICS_SYSTEM = """Ты — куратор. Сгруппируй список инсайтов по 10–30 темам.
-Верни JSON:
-{
-"topics":[{"topic_id":"t-<id>","title":"название темы","desc":"1–2 предложения","insight_ids":["i-1","i-2","..."]}],
-"orphans":["i-..."]
-}
-Без комментариев вне JSON.
-"""
-
-PROMPT_TOPICS_USER = """Инсайты (id, title, summary):
-<<<
-{insights}
-
-> > >
-
-Сгруппируй и верни JSON.
-"""
-
-PROMPT_NOTE_SYSTEM = """Ты — генератор Obsidian-заметок. Верни ровно ОДИН Markdown-документ.
-Требования:
-
-* YAML: title, created (ISO), tags[], source_url?, source_author?, source_dt?, topic_id?
-* Тело:
-
-  * 3–5 предложений описания (суть из summary)
-  * Раздел "Тезисы": маркдаун-список из bullets (каждый — 1 факт/правило)
-  * (опц) "Применение": когда и как использовать
-  * "Источники": список ссылок (если есть source_url)
-  * (опц) "См. также": до 5 [[Заголовок]] из предоставленного списка candidates
-    Никаких комментариев вне Markdown.
-    Строго сохраняй смысл, не выдумывай факты.
-"""
-
-PROMPT_NOTE_USER = """Данные:
-title="{title}"
-summary="{summary}"
-bullets={bullets}
-tags={tags}
-meta: source_url={url}, source_author={author}, source_dt={dt}, topic_id={topic_id}
-Кандидаты для "См. также": {candidates}
-Сгенерируй один Markdown.
-"""
-
-PROMPT_MOC_SYSTEM = """Ты — редактор MOC. Верни один Markdown с оглавлением по темам.
-Для каждой темы: "## {{title}}" и список "- [[NoteTitle]] — 1 строка описания".
-Без комментариев вне Markdown.
-"""
-
-PROMPT_MOC_USER = """Темы и заметки:
-{topics_json}
-Сгенерируй один Markdown MOC.
-"""
-
-PROMPT_AUTOLINK_SYSTEM = """Ты — помощник связей. По заголовку/summary текущей заметки выбери до 5 релевантных из списка кандидатов.
-Верни JSON: {"related_titles":["...", "..."]} без комментариев.
-"""
-
-PROMPT_AUTOLINK_USER = """Текущая заметка: title="{title}", summary="{summary}"
-Кандидаты: {candidates}
-Верни JSON.
-"""
-
-PROMPT_ANSWER_SYSTEM = """Ты — ассистент базы заметок. Отвечай ТОЛЬКО по CONTEXT (список фрагментов).
-Если ответа нет — скажи "не нашёл в базе".
-В конце дай раздел "См. также" со списком до 5 заметок (title → ссылка).
-Верни Markdown.
-"""
-
-PROMPT_ANSWER_USER = """QUERY: {query}
-CONTEXT:
-
-{context}
-Сформируй краткий, точный ответ только из CONTEXT.
-"""
 
 
 class LLMClientError(Exception):
@@ -125,7 +18,12 @@ class LLMClientError(Exception):
 class ReplicateLLMClient(LLMClient):
     """LLM client powered by Replicate API."""
 
-    def __init__(self, settings: Settings | None = None, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        timeout: float = 30.0,
+        prompts_path: str | Path | None = None,
+    ) -> None:
         self.settings = settings or get_settings()
         self.timeout = timeout
         self.session = requests.Session()
@@ -135,6 +33,29 @@ class ReplicateLLMClient(LLMClient):
                 "Content-Type": "application/json",
             }
         )
+
+        self.prompts_path = (
+            Path(prompts_path)
+            if prompts_path is not None
+            else Path(__file__).resolve().parents[2] / "config" / "prompts.yaml"
+        )
+        try:
+            with self.prompts_path.open("r", encoding="utf-8") as fh:
+                self.prompts: Dict[str, Dict[str, str]] = yaml.safe_load(fh) or {}
+        except FileNotFoundError as exc:
+            raise LLMClientError(
+                f"Prompts file not found: {self.prompts_path}"
+            ) from exc
+        except yaml.YAMLError as exc:
+            raise LLMClientError("Failed to parse prompts file") from exc
+
+    def _prompt(self, section: str, key: str) -> str:
+        try:
+            return self.prompts[section][key]
+        except KeyError as exc:
+            raise LLMClientError(
+                f"Prompt '{section}.{key}' not found in {self.prompts_path}"
+            ) from exc
 
     def _call(self, model: str, messages: List[Dict[str, str]]) -> str:
         url = (
@@ -154,11 +75,11 @@ class ReplicateLLMClient(LLMClient):
             raise LLMClientError("Unexpected response from Replicate") from exc
 
     def generate_structured_notes(self, text: str) -> List[Dict[str, Any]]:
-        user_prompt = PROMPT_INSIGHTS_USER.format(raw_text=text)
+        user_prompt = self._prompt("insights", "user").format(raw_text=text)
         content = self._call(
             "openai/gpt-5-structured",
             [
-                {"role": "system", "content": PROMPT_INSIGHTS_SYSTEM},
+                {"role": "system", "content": self._prompt("insights", "system")},
                 {"role": "user", "content": user_prompt},
             ],
         )
@@ -168,18 +89,20 @@ class ReplicateLLMClient(LLMClient):
         lines = [
             f"{i.get('id')}\t{i.get('title')}\t{i.get('summary')}" for i in insights
         ]
-        user_prompt = PROMPT_TOPICS_USER.format(insights="\n".join(lines))
+        user_prompt = self._prompt("topics", "user").format(
+            insights="\n".join(lines)
+        )
         content = self._call(
             "openai/gpt-5-structured",
             [
-                {"role": "system", "content": PROMPT_TOPICS_SYSTEM},
+                {"role": "system", "content": self._prompt("topics", "system")},
                 {"role": "user", "content": user_prompt},
             ],
         )
         return json.loads(content)
 
     def render_note_markdown(self, insight: Dict[str, Any]) -> str:
-        user_prompt = PROMPT_NOTE_USER.format(
+        user_prompt = self._prompt("note", "user").format(
             title=insight.get("title", ""),
             summary=insight.get("summary", ""),
             bullets=json.dumps(insight.get("bullets", []), ensure_ascii=False),
@@ -195,17 +118,17 @@ class ReplicateLLMClient(LLMClient):
         return self._call(
             "openai/gpt-5-structured",
             [
-                {"role": "system", "content": PROMPT_NOTE_SYSTEM},
+                {"role": "system", "content": self._prompt("note", "system")},
                 {"role": "user", "content": user_prompt},
             ],
         )
 
     def generate_moc(self, topics_json: str) -> str:
-        user_prompt = PROMPT_MOC_USER.format(topics_json=topics_json)
+        user_prompt = self._prompt("moc", "user").format(topics_json=topics_json)
         return self._call(
             "openai/gpt-5-structured",
             [
-                {"role": "system", "content": PROMPT_MOC_SYSTEM},
+                {"role": "system", "content": self._prompt("moc", "system")},
                 {"role": "user", "content": user_prompt},
             ],
         )
@@ -213,7 +136,7 @@ class ReplicateLLMClient(LLMClient):
     def find_autolinks(
         self, title: str, summary: str, candidates: List[str]
     ) -> List[str]:
-        user_prompt = PROMPT_AUTOLINK_USER.format(
+        user_prompt = self._prompt("autolink", "user").format(
             title=title,
             summary=summary,
             candidates=json.dumps(candidates, ensure_ascii=False),
@@ -221,7 +144,7 @@ class ReplicateLLMClient(LLMClient):
         content = self._call(
             "openai/gpt-5-structured",
             [
-                {"role": "system", "content": PROMPT_AUTOLINK_SYSTEM},
+                {"role": "system", "content": self._prompt("autolink", "system")},
                 {"role": "user", "content": user_prompt},
             ],
         )
@@ -235,13 +158,13 @@ class ReplicateLLMClient(LLMClient):
             context_lines.append(
                 f"{idx}. [{frag.get('title')}] {frag.get('snippet')} ({frag.get('url')})"
             )
-        user_prompt = PROMPT_ANSWER_USER.format(
+        user_prompt = self._prompt("answer", "user").format(
             query=query, context="\n".join(context_lines)
         )
         return self._call(
             "openai/gpt-5-nano",
             [
-                {"role": "system", "content": PROMPT_ANSWER_SYSTEM},
+                {"role": "system", "content": self._prompt("answer", "system")},
                 {"role": "user", "content": user_prompt},
             ],
         )

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -76,3 +77,18 @@ def test_find_autolinks(monkeypatch):
     monkeypatch.setattr(client, "_call", lambda m, msgs: json.dumps(expected))
     result = client.find_autolinks("t", "s", ["A", "B", "C"])
     assert result == expected["related_titles"]
+
+
+def test_missing_prompts_file(tmp_path: Path) -> None:
+    missing = tmp_path / "nope.yaml"
+    with pytest.raises(LLMClientError):
+        ReplicateLLMClient(settings=DummySettings(), prompts_path=missing)
+
+
+def test_missing_prompt_key(monkeypatch, tmp_path: Path) -> None:
+    prompts_file = tmp_path / "p.yaml"
+    prompts_file.write_text("insights:\n  system: s\n  user: u\n", encoding="utf-8")
+    client = ReplicateLLMClient(settings=DummySettings(), prompts_path=prompts_file)
+    monkeypatch.setattr(client, "_call", lambda m, msgs: "{}")
+    with pytest.raises(LLMClientError):
+        client.group_topics([])
