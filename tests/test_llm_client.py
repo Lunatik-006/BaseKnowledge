@@ -54,3 +54,25 @@ def test_render_note_markdown(monkeypatch):
     monkeypatch.setattr(client, "_call", lambda m, msgs: "markdown")
     result = client.render_note_markdown({"title": "t", "summary": "", "bullets": [], "tags": []})
     assert result == "markdown"
+
+
+def test_group_topics(monkeypatch):
+    client = make_client()
+    expected = {"topics": [], "orphans": []}
+    monkeypatch.setattr(client, "_call", lambda m, msgs: json.dumps(expected))
+    result = client.group_topics([{"id": "i-1", "title": "t1", "summary": "s"}])
+    assert result == expected
+
+
+def test_generate_moc(monkeypatch):
+    client = make_client()
+    monkeypatch.setattr(client, "_call", lambda m, msgs: "moc")
+    assert client.generate_moc("{}") == "moc"
+
+
+def test_find_autolinks(monkeypatch):
+    client = make_client()
+    expected = {"related_titles": ["A", "B"]}
+    monkeypatch.setattr(client, "_call", lambda m, msgs: json.dumps(expected))
+    result = client.find_autolinks("t", "s", ["A", "B", "C"])
+    assert result == expected["related_titles"]
