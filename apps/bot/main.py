@@ -213,7 +213,7 @@ async def _process_text(
 # Main entry
 
 
-async def main() -> None:
+def main() -> None:
     """Run the Telegram bot."""
 
     settings = get_settings()
@@ -234,12 +234,11 @@ async def main() -> None:
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.FORWARDED, handle_text)
     )
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await app.updater.idle()
+    # ``run_polling`` handles initialization, starting and graceful shutdown,
+    # so we don't need to access the updater directly.
+    app.run_polling()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 
