@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getNotes } from '@/lib/api';
+import { getNotes, getZipUrl } from '@/lib/api';
 
 export default function HomePage() {
   const [notes, setNotes] = useState<Array<{ id: string; title: string }>>([]);
@@ -14,6 +14,9 @@ export default function HomePage() {
   return (
     <main>
       <h1>Notes</h1>
+      <a href={getZipUrl()}>
+        <button>Download ZIP</button>
+      </a>
       <ul>
         {notes.map((note) => (
           <li key={note.id}>
