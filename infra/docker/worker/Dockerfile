@@ -9,7 +9,8 @@ RUN pip install --no-cache-dir \
     python-telegram-bot \
     requests \
     pydantic==2.11.7 \
-    pydantic-settings==2.10.1
+    pydantic-settings==2.10.1 \
+    httpx
 
 ENV PYTHONPATH=/app
 CMD ["python", "apps/bot/main.py"]
