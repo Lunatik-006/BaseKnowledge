@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     replicate_api_token: str = Field(default="")
     telegram_bot_token: str = Field(default="")
+    bot_api_token: str = Field(default="")
     public_url: str = Field(default="")
     telegram_webhook_secret: str = Field(default="")
     milvus_uri: str = Field(default="")
