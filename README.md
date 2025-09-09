@@ -103,6 +103,8 @@ curl -X POST http://localhost:8000/search \
 Подробные инструкции по установке зависимостей, запуску тестов и работе с Docker находятся в [TESTING.md](TESTING.md).
 
 ## Пайплайн - наглядно
+
+```mermaid
 graph TD
   %% ==== Пользователь и источники ====
   U[Пользователь] -->|пересылает посты / длинный текст| TB[Telegram Bot]
@@ -169,3 +171,4 @@ graph TD
     YT[YouTube/Видео] -.->|/ingest/video| API
     IMG[Фото с текстом] -.->|/ingest/image (OCR)| API
   end
+```
