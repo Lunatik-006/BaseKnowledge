@@ -32,6 +32,12 @@ def test_ingest_text_missing_milvus_uri(client, monkeypatch):
             postgres_uri="postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
         ),
     )
+    # The VectorIndex class imports get_settings from its own module, so we
+    # patch it there as well to simulate a missing MILVUS_URI and avoid a
+    # real network call.
+    import libs.rag.vector_index as vi
+
+    monkeypatch.setattr(vi, "get_settings", lambda: SimpleNamespace(milvus_uri=""))
 
     response = client.post("/ingest/text", json={"text": "hello"})
     assert response.status_code == 500

@@ -22,7 +22,14 @@ class Settings(BaseSettings):
     )
     vault_dir: Path = Field(default=Path("/tmp/vault"))
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        # Allow environment variables that don't have a matching field.
+        # This makes the settings more robust when extra variables are
+        # present in the environment (e.g. NEXT_PUBLIC_API_URL).
+        extra="ignore",
+    )
 
 
 @lru_cache
