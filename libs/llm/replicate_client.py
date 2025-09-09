@@ -37,7 +37,7 @@ class ReplicateLLMClient(LLMClient):
         self.prompts_path = (
             Path(prompts_path)
             if prompts_path is not None
-            else Path(__file__).resolve().parents[2] / "config" / "prompts.yaml"
+            else Path("/app/config/prompts.yaml")
         )
         try:
             with self.prompts_path.open("r", encoding="utf-8") as fh:
