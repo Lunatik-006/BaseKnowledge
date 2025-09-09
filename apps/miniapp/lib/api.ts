@@ -51,12 +51,12 @@ export async function searchNotes(
   };
 }
 
-export function getZipUrl(id: string): string {
+export function getZipUrl(): string {
   const initData = getInitData();
-  const url = `${API_BASE_URL}/export/zip/${id}`;
+  const url = `${API_BASE_URL}/export/zip`;
   return initData ? `${url}?initData=${encodeURIComponent(initData)}` : url;
 }
 
-export function getObsidianUrl(id: string): string {
-  return `obsidian://${id}`;
+export function getObsidianUrl(slug: string): string {
+  return `obsidian://${slug}`;
 }

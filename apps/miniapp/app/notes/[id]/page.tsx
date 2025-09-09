@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { getNote, getZipUrl, getObsidianUrl } from '@/lib/api';
 
 export default function NotePage({ params }: { params: { id: string } }) {
-  const { id } = params;
+  const { id: slug } = params;
   const [note, setNote] = useState<{ id: string; title: string; content: string } | null>(null);
 
   useEffect(() => {
-    getNote(id).then(setNote).catch(() => setNote(null));
-  }, [id]);
+    getNote(slug).then(setNote).catch(() => setNote(null));
+  }, [slug]);
 
   if (!note) {
     return <main>Loading...</main>;
@@ -18,12 +19,12 @@ export default function NotePage({ params }: { params: { id: string } }) {
   return (
     <main>
       <h1>{note.title}</h1>
-      <pre>{note.content}</pre>
+      <ReactMarkdown>{note.content}</ReactMarkdown>
       <div style={{ marginTop: '1rem' }}>
-        <a href={getZipUrl(id)}>
+        <a href={getZipUrl()}>
           <button>Download ZIP</button>
         </a>
-        <a href={getObsidianUrl(id)} style={{ marginLeft: '0.5rem' }}>
+        <a href={getObsidianUrl(slug)} style={{ marginLeft: '0.5rem' }}>
           <button>Open in Obsidian</button>
         </a>
       </div>
