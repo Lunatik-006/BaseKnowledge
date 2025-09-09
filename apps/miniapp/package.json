@@ -12,7 +12,8 @@
     "@twa-dev/sdk": "^8.0.2",
     "next": "15.4.6",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "react-markdown": "^9.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

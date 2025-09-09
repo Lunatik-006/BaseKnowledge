@@ -2,16 +2,19 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
 import { searchNotes } from '@/lib/api';
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Array<{id: string; title: string}>>([]);
+  const [answer, setAnswer] = useState('');
+  const [items, setItems] = useState<Array<{ id: string; title: string }>>([]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await searchNotes(query);
-    setResults(res);
+    setAnswer(res.answer_md);
+    setItems(res.items);
   };
 
   return (
@@ -25,13 +28,19 @@ export default function SearchPage() {
         />
         <button type="submit">Search</button>
       </form>
-      <ul>
-        {results.map((note) => (
-          <li key={note.id}>
-            <Link href={`/notes/${note.id}`}>{note.title}</Link>
-          </li>
-        ))}
-      </ul>
+      {answer && <ReactMarkdown>{answer}</ReactMarkdown>}
+      {items.length > 0 && (
+        <div>
+          <h2>См. также</h2>
+          <ul>
+            {items.map((note) => (
+              <li key={note.id}>
+                <Link href={`/notes/${note.id}`}>{note.title}</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </main>
   );
 }
