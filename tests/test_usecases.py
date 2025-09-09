@@ -11,20 +11,32 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     storage = NotesStorage(vault)
 
     llm = MagicMock()
-
     llm.generate_structured_notes.return_value = [
         {
+            "id": "i1",
             "title": "My Note",
+            "summary": "S",
             "tags": ["x"],
             "meta": {
                 "source_url": "http://example.com",
                 "source_author": "Alice",
                 "source_dt": "2024-02-02",
-                "topic_id": "topic42",
                 "source_channel": "telegram",
             },
         }
     ]
+    llm.group_topics.return_value = {
+        "topics": [
+            {
+                "topic_id": "topic42",
+                "title": "T",
+                "desc": "D",
+                "insight_ids": ["i1"],
+            }
+        ],
+        "orphans": [],
+    }
+    llm.find_autolinks.return_value = []
     llm.render_note_markdown.return_value = (
         "---\n"
         "title: My Note\n"
@@ -32,6 +44,7 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
         "---\n\n"
         "Body text"
     )
+    llm.generate_moc.return_value = "MOC"
 
 
     embedder = MagicMock()
@@ -55,7 +68,10 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     asyncio.run(ingest("raw text"))
 
     llm.generate_structured_notes.assert_called_once_with("raw text")
+    llm.group_topics.assert_called_once()
+    llm.find_autolinks.assert_called_once()
     llm.render_note_markdown.assert_called_once()
+    llm.generate_moc.assert_called_once()
     embedder.embed_texts.assert_called_once_with(["Body text"])
     index.upsert_chunks.assert_called_once()
     note_path = vault / "10_Notes" / "my-note.md"
@@ -69,6 +85,8 @@ def test_ingest_text_pipeline(tmp_path: Path) -> None:
     assert "source_url: http://example.com" in fm
     assert "topic_id: topic42" in fm
     assert "channel: telegram" in fm
+    moc_path = vault / "00_MOC" / "topics_index.md"
+    assert moc_path.read_text() == "MOC\n"
 
     kwargs = note_repo.create.call_args.kwargs
     assert kwargs["author"] == "Alice"
@@ -95,7 +113,10 @@ def test_ingest_text_handles_no_insights(tmp_path: Path) -> None:
     result = asyncio.run(ingest("raw text"))
 
     assert result == []
+    llm.group_topics.assert_not_called()
+    llm.find_autolinks.assert_not_called()
     llm.render_note_markdown.assert_not_called()
+    llm.generate_moc.assert_not_called()
     embedder.embed_texts.assert_not_called()
     index.upsert_chunks.assert_not_called()
     assert not (vault / "10_Notes").exists()
@@ -107,9 +128,12 @@ def test_ingest_text_russian_title(tmp_path: Path) -> None:
 
     llm = MagicMock()
     llm.generate_structured_notes.return_value = [
-        {"title": "Привет Мир", "tags": [], "meta": {}}
+        {"id": "i1", "title": "Привет Мир", "summary": "s", "tags": [], "meta": {}}
     ]
+    llm.group_topics.return_value = {"topics": [], "orphans": []}
+    llm.find_autolinks.return_value = []
     llm.render_note_markdown.return_value = "Body text"
+    llm.generate_moc.return_value = ""
 
     embedder = MagicMock()
     embedder.embed_texts.return_value = [[0.0, 0.1, 0.2]]
