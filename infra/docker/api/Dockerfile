@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir \
     sqlalchemy \
     pydantic-settings \
     "psycopg[binary]" \
-    pymilvus \
+    pymilvus==2.6.1 \
     alembic
 
 ENV PYTHONPATH=/app

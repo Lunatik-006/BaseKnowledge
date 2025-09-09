@@ -36,7 +36,7 @@ services:
     ports:
       - "5432:5432"
   milvus:
-    image: milvusdb/milvus:v2.3.10
+    image: milvusdb/milvus:v2.6.1
     restart: unless-stopped
     # Milvus requires an explicit command to start the standalone server.
     # Without it the container only launches `tini` which immediately exits
@@ -47,9 +47,6 @@ services:
       ETCD_DATA_DIR: /var/lib/milvus/etcd
       MINIO_USE_EMBEDDED: "true"
       MINIO_DATA_DIR: /var/lib/milvus/minio
-      # Enable embedded Pulsar message queue to ensure datacoord/querycoord start
-      PULSAR_USE_EMBEDDED: "true"
-      PULSAR_DATA_DIR: /var/lib/milvus/pulsar
       MILVUS_LOGS_PATH: /var/lib/milvus/logs
       MILVUS_DATA_PATH: /var/lib/milvus/data
     ports:
