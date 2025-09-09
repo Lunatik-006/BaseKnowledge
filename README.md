@@ -101,3 +101,71 @@ curl -X POST http://localhost:8000/search \
 
 ## Тестирование и отладка
 Подробные инструкции по установке зависимостей, запуску тестов и работе с Docker находятся в [TESTING.md](TESTING.md).
+
+## Пайплайн - наглядно
+graph TD
+  %% ==== Пользователь и источники ====
+  U[Пользователь] -->|пересылает посты / длинный текст| TB[Telegram Bot]
+  U -.->|открывает| MA[Mini App (Telegram WebApp)]
+
+  %% ==== Бот: приём и буферизация ====
+  subgraph TG[Telegram слой]
+    TB -->|режим One-to-One / Curate| BUF[Буфер сессии\n(склейка сообщений, таймаут)]
+    TB -->|вебхук| API[/FastAPI: /telegram/webhook/…/]
+  end
+
+  BUF -->|готово к обработке| API
+
+  %% ==== Бэкенд: Ingest ====
+  subgraph BE[Backend (FastAPI)]
+    API -->|/ingest/text\n(raw text + meta)| UC[UseCase: IngestText]
+    UC -->|prompt 8.1 → JSON инсайтов| LLM1[(Replicate → openai/gpt-5-structured)]
+    LLM1 --> INS[Insights JSON]
+
+    %% Генерация заметок
+    INS -->|по каждому insight| LLM2[(Replicate → gpt-5-structured)]
+    LLM2 --> MD[Markdown с YAML\nObsidian-нативно]
+
+    %% Хранилище заметок
+    MD --> FS[(Файловая система\nvault/…/*.md)]
+    MD -->|метаданные| PG[(PostgreSQL\nusers/notes/chunks_meta)]
+
+    %% Индексация
+    MD --> CHK[Чанкинг 200–500 симв.\nзаголовки/абзацы]
+    CHK --> EMB[(Replicate → BGE-M3\nэмбеддинги)]
+    EMB --> MIL[(Milvus\nколлекция chunks)]
+    CHK -->|anchor/pos| PG
+  end
+
+  %% ==== Mini App: просмотр и экспорт ====
+  subgraph UI[Mini App (Next.js WebApp)]
+    MA -->|/notes, /notes/{id}| API
+    API -->|md + meta| VIEW[Рендер Markdown\n(YAML, «Тезисы», «См. также»)]
+    MA -->|Download| ZIP[/FastAPI: /export/zip/]
+    MA -->|Open in Obsidian| OURI[obsidian://advanced-uri…]
+  end
+
+  FS -->|ZIP| ZIP
+  VIEW --> REL[«См. также»\n(вики-ссылки)]
+  REL --> VIEW
+
+  %% ==== Поиск (RAG) ====
+  subgraph SRCH[Поиск]
+    MA -->|/search (query)| API
+    API --> QEMB[(Replicate → BGE-M3\nэмбеддинг запроса)]
+    QEMB -->|top-K| MIL
+    MIL --> TOPK[Top-K сниппетов\n(note_id, snippet, url)]
+    TOPK --> LLM3[(Replicate → openai/gpt-5-nano)]
+    LLM3 --> ANSW[Markdown-ответ\nТОЛЬКО из CONTEXT + «См. также»]
+    ANSW --> MA
+  end
+
+  %% ==== Обновление MOC / связей ====
+  INS -->|опц. группировка| MOC[MOC (карта содержания)]
+  MOC --> FS
+
+  %% ==== Будущее (зарезервировано) ====
+  subgraph FUTURE[Будущее (зарезервировано в API)]
+    YT[YouTube/Видео] -.->|/ingest/video| API
+    IMG[Фото с текстом] -.->|/ingest/image (OCR)| API
+  end
