@@ -199,7 +199,9 @@ async def _process_text(
 # Main entry
 
 
-async def main() -> None:
+def main() -> None:
+    """Run the Telegram bot."""
+
     settings = get_settings()
     token = settings.telegram_bot_token
     if not token:
@@ -218,9 +220,9 @@ async def main() -> None:
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.FORWARDED, handle_text)
     )
 
-    await app.run_polling()
+    app.run_polling()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 
