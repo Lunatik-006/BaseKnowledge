@@ -11,7 +11,7 @@ import asyncio
 import hashlib
 from typing import List
 
-import requests
+import httpx
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -73,7 +73,8 @@ async def ingest(text: str) -> List[dict]:
 
     settings = get_settings()
     url = f"{settings.public_url}/ingest/text"
-    response = await asyncio.to_thread(requests.post, url, json={"text": text})
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json={"text": text})
     response.raise_for_status()
     data = response.json()
     return data.get("notes", [])
@@ -88,9 +89,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     lang = _get_lang(update, context)
     settings = get_settings()
-    keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton(MESSAGES["open_app"][lang], url=f"{settings.public_url}/miniapp")]]
-    )
+    keyboard = None
+    if settings.public_url:
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        MESSAGES["open_app"][lang], url=f"{settings.public_url}/miniapp"
+                    )
+                ]
+            ]
+        )
     await update.message.reply_text(MESSAGES["start"][lang], reply_markup=keyboard)
 
 
@@ -178,11 +187,16 @@ async def _process_text(
         notes = await ingest(text)
         if notes:
             settings = get_settings()
-            lines = [
-                f"- [{n['title']}]({settings.public_url}/miniapp?note={n['id']})"
-                for n in notes
-            ]
-            lines.append(f"{MESSAGES['zip'][lang]}: {settings.public_url}/export/zip")
+            if settings.public_url:
+                lines = [
+                    f"- [{n['title']}]({settings.public_url}/miniapp?note={n['id']})"
+                    for n in notes
+                ]
+                lines.append(
+                    f"{MESSAGES['zip'][lang]}: {settings.public_url}/export/zip"
+                )
+            else:
+                lines = [f"- {n['title']}" for n in notes]
             reply = MESSAGES["done"][lang] + "\n" + "\n".join(lines)
         else:
             reply = MESSAGES["no_notes"][lang]
@@ -199,7 +213,7 @@ async def _process_text(
 # Main entry
 
 
-def main() -> None:
+async def main() -> None:
     """Run the Telegram bot."""
 
     settings = get_settings()
@@ -220,9 +234,12 @@ def main() -> None:
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.FORWARDED, handle_text)
     )
 
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 
