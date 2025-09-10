@@ -12,6 +12,7 @@ from telegram import Bot, Update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from libs.core.settings import get_settings
+from libs.logging import setup_logging
 from libs.storage.notes_storage import NotesStorage
 from libs.llm.replicate_client import ReplicateLLMClient
 from libs.llm.embeddings_provider import EmbeddingsProvider
@@ -29,6 +30,9 @@ MAX_NOTE_LEN = 1000
 
 # ---------------------------------------------------------------------------
 # Dependency factories
+
+
+setup_logging()
 
 
 def get_storage() -> NotesStorage:
@@ -294,3 +298,16 @@ async def telegram_webhook(
 
 
 __all__ = ["app"]
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    settings = get_settings()
+    uvicorn.run(
+        "apps.api.main:app",
+        host="0.0.0.0",
+        port=8000,
+        log_config=None,
+        log_level=settings.log_level.lower(),
+    )

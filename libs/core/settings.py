@@ -22,6 +22,7 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
     )
     vault_dir: Path = Field(default=Path("/tmp/vault"))
+    log_level: str = Field(default="INFO")
 
     model_config = SettingsConfigDict(
         env_file=".env",
