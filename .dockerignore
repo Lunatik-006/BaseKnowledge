@@ -1,0 +1,31 @@
+# Git repository
+.git
+
+# Tests
+tests/
+
+# Node modules for miniapp
+apps/miniapp/node_modules
+
+# IDE/editor directories
+.idea/
+.vscode/
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg*
+
+# Node and build logs
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Temporary files
+*.log
+*.tmp
+*.swp
+*~
+.DS_Store
