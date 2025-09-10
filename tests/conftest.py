@@ -31,6 +31,30 @@ class _DummyUpdate:
 sys.modules.setdefault("telegram", SimpleNamespace(Bot=_DummyBot, Update=_DummyUpdate))
 sys.modules.setdefault("replicate", SimpleNamespace(run=lambda *args, **kwargs: None))
 
+# Avoid slow network calls to Milvus during tests
+try:
+    import pymilvus
+
+    pymilvus.connections.connect = lambda *args, **kwargs: None
+    pymilvus.utility.has_collection = lambda name: True
+
+    class _DummyCollection:
+        def __init__(self, *args, **kwargs) -> None:  # pragma: no cover - simple stub
+            pass
+
+        def load(self) -> None:  # pragma: no cover - simple stub
+            pass
+
+        def upsert(self, data):  # pragma: no cover - simple stub
+            pass
+
+        def search(self, *args, **kwargs):  # pragma: no cover - simple stub
+            return []
+
+    pymilvus.Collection = _DummyCollection
+except Exception:  # pragma: no cover - if pymilvus missing
+    pass
+
 from apps.api.main import app, get_storage, ingest_text_uc, search_uc, current_user
 from libs.storage import NotesStorage, Note
 
