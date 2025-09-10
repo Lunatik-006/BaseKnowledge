@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +11,9 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+# Use in-memory SQLite during tests to avoid network DB access
+os.environ["POSTGRES_URI"] = "sqlite+aiosqlite:///:memory:"
 
 # Provide dummy external modules
 
