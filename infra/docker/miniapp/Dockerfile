@@ -14,6 +14,6 @@ ENV NODE_ENV=production
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/public ./public
+# No public assets are used; omit copying missing /app/public
 EXPOSE 3000
 CMD ["npm", "start"]
