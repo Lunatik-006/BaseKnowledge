@@ -4,6 +4,4 @@ replicate==1.0.7
 sqlalchemy==2.0.43
 psycopg[binary]==3.2.9
 pymilvus==2.6.1
-alembic==1.16.5
 PyYAML==6.0.2
-aiosqlite==0.21.0

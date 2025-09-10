@@ -2,17 +2,8 @@ x-log-env: &log-env
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
 services:
-  baseimage:
-    # Keep local build only for development; excluded from prod by profile
-    build:
-      context: .
-      dockerfile: infra/docker/base.Dockerfile
-    image: baseknowledge-base:latest
-    profiles: ["build"]
-    environment:
-      <<: *log-env
   api:
-    # Pull prebuilt image from GHCR
+    # Pull prebuilt image from GHCR (built by GitHub Actions)
     image: ghcr.io/${GHCR_NAMESPACE}/baseknowledge-api:${IMAGE_TAG:-latest}
     env_file:
       - .env
@@ -51,7 +42,7 @@ services:
       <<: *log-env
     restart: unless-stopped
   bot:
-    # Pull prebuilt image from GHCR
+    # Pull prebuilt image from GHCR (built by GitHub Actions)
     image: ghcr.io/${GHCR_NAMESPACE}/baseknowledge-bot:${IMAGE_TAG:-latest}
     env_file:
       - .env
@@ -134,7 +125,7 @@ services:
       - certbot-web:/var/www/certbot
     depends_on:
       - nginx
-    command: certonly --webroot --webroot-path=/var/www/certbot --email admin@mindweaver.online --agree-tos --no-eff-email -d mindweaver.online
+    command: certonly --webroot --webroot-path=/var/www/certbot --email moon.nut@yandex.ru --agree-tos --no-eff-email -d mindweaver.online
     networks:
       - api
       - miniapp

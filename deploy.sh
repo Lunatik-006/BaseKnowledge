@@ -9,6 +9,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Ensure repo is up-to-date (requires the server clone to have origin configured)
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "[deploy] Updating repo from origin/main"
+  git fetch --all --prune
+  # Use main by default; adjust BRANCH env to override
+  BRANCH_NAME=${BRANCH:-main}
+  git checkout "$BRANCH_NAME" || true
+  git reset --hard "origin/$BRANCH_NAME"
+else
+  echo "[deploy] Warning: not a git repo. Skipping git update." >&2
+fi
+
 # Load variables from .env for compose substitution and GHCR auth
 if [ -f ./.env ]; then
   set -o allexport
@@ -40,4 +52,3 @@ echo "[deploy] Pruning unused images"
 docker image prune -f >/dev/null || true
 
 echo "[deploy] Done."
-
