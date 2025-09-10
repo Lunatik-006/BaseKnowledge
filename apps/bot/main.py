@@ -23,6 +23,7 @@ from telegram.ext import (
 )
 
 from libs.core.settings import get_settings
+from libs.logging import setup_logging
 
 
 # ---------------------------------------------------------------------------
@@ -269,5 +270,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     main()
 
