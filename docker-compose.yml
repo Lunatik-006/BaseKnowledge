@@ -3,16 +3,17 @@ x-log-env: &log-env
 
 services:
   baseimage:
+    # Keep local build only for development; excluded from prod by profile
     build:
       context: .
       dockerfile: infra/docker/base.Dockerfile
     image: baseknowledge-base:latest
+    profiles: ["build"]
     environment:
       <<: *log-env
   api:
-    build:
-      context: .
-      dockerfile: infra/docker/api/Dockerfile
+    # Pull prebuilt image from GHCR
+    image: ghcr.io/${GHCR_NAMESPACE}/baseknowledge-api:${IMAGE_TAG:-latest}
     env_file:
       - .env
     depends_on:
@@ -33,12 +34,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
   miniapp:
-    build:
-      context: .
-      dockerfile: infra/docker/miniapp/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    # Pull prebuilt image from GHCR
+    image: ghcr.io/${GHCR_NAMESPACE}/baseknowledge-miniapp:${IMAGE_TAG:-latest}
     env_file:
       - .env
     depends_on:
@@ -50,10 +49,10 @@ services:
       - miniapp
     environment:
       <<: *log-env
+    restart: unless-stopped
   bot:
-    build:
-      context: .
-      dockerfile: infra/docker/worker/Dockerfile
+    # Pull prebuilt image from GHCR
+    image: ghcr.io/${GHCR_NAMESPACE}/baseknowledge-bot:${IMAGE_TAG:-latest}
     env_file:
       - .env
     depends_on:
@@ -68,6 +67,7 @@ services:
       - api
     environment:
       <<: *log-env
+    restart: unless-stopped
   postgres:
     image: postgres:15
     restart: unless-stopped

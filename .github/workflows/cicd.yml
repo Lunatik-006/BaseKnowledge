@@ -1,0 +1,168 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: baseknowledge
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-api.txt
+          pip install pytest
+
+      - name: Run pytest
+        run: pytest -q
+
+      - name: Node.js tests (miniapp)
+        if: hashFiles('apps/miniapp/package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: apps/miniapp/package-lock.json
+
+      - name: Install and lint miniapp
+        if: hashFiles('apps/miniapp/package.json') != ''
+        working-directory: apps/miniapp
+        run: |
+          npm ci
+          npm run lint --if-present
+
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx (local driver)
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build local base image so api/worker Dockerfiles can use FROM baseknowledge-base:latest
+      - name: Build base image (local)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/base.Dockerfile
+          tags: baseknowledge-base:latest
+          load: true
+
+      # API image
+      - name: Docker meta (api)
+        id: meta_api
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PREFIX }}-api
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push (api)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/api/Dockerfile
+          push: true
+          tags: ${{ steps.meta_api.outputs.tags }}
+          labels: ${{ steps.meta_api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Worker/bot image
+      - name: Docker meta (bot)
+        id: meta_bot
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PREFIX }}-bot
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push (bot)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/worker/Dockerfile
+          push: true
+          tags: ${{ steps.meta_bot.outputs.tags }}
+          labels: ${{ steps.meta_bot.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Miniapp image
+      - name: Docker meta (miniapp)
+        id: meta_mini
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PREFIX }}-miniapp
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push (miniapp)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/miniapp/Dockerfile
+          push: true
+          tags: ${{ steps.meta_mini.outputs.tags }}
+          labels: ${{ steps.meta_mini.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: SSH deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: GHCR_USERNAME,GHCR_TOKEN
+          script: |
+            export GHCR_USERNAME='${{ secrets.GHCR_USERNAME }}'
+            export GHCR_TOKEN='${{ secrets.GHCR_TOKEN }}'
+            cd /root/BaseKnowledge
+            bash ./deploy.sh
