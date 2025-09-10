@@ -17,7 +17,7 @@ from libs.llm.replicate_client import ReplicateLLMClient
 from libs.llm.embeddings_provider import EmbeddingsProvider
 from libs.rag import VectorIndex
 from libs.usecases import IngestText, Search
-from libs.db import get_session, NoteRepo, ChunkRepo, UserRepo, models
+from libs.db import get_session, NoteRepo, ChunkRepo, UserRepo, models, init_db
 
 import hmac
 import hashlib
@@ -126,6 +126,11 @@ class SearchRequest(BaseModel):
 # FastAPI application
 
 app = FastAPI(title="BaseKnowledge API")
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    await init_db()
 
 
 # Factory dependencies for use cases -------------------------------------------------
