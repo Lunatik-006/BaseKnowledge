@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from typing import List
+from typing import List, Optional, Tuple
 
 import httpx
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -48,6 +48,15 @@ MESSAGES = {
     "done": {"en": "Notes created:", "ru": "Созданные заметки:"},
     "zip": {"en": "Download ZIP", "ru": "Скачать ZIP"},
     "error": {"en": "Error: {error}", "ru": "Ошибка: {error}"},
+    "service_unavailable": {
+        "en": "Service temporarily unavailable",
+        "ru": "Сервис временно недоступен",
+    },
+    "request_rejected": {"en": "Request rejected", "ru": "Запрос отклонён"},
+    "dev_info": {
+        "en": "info for developers: {info}",
+        "ru": "инфо для разработчика: {info}",
+    },
     "no_text": {"en": "Text is empty", "ru": "Текст пуст"},
     "no_notes": {"en": "No notes created", "ru": "Заметки не созданы"},
 }
@@ -68,18 +77,22 @@ def _get_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
 # API interaction
 
 
-async def ingest(text: str) -> List[dict]:
+async def ingest(text: str) -> Tuple[List[dict], Optional[dict]]:
     """Send text to the API and return list of created notes."""
 
     settings = get_settings()
     url = f"{settings.public_url}/ingest/text"
     token = settings.bot_api_token
     headers = {"X-Bot-Api-Token": token} if token else None
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json={"text": text}, headers=headers)
-    response.raise_for_status()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json={"text": text}, headers=headers)
+            response.raise_for_status()
+    except httpx.HTTPError as exc:  # pragma: no cover - network errors
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        return [], {"status": status, "message": str(exc)}
     data = response.json()
-    return data.get("notes", [])
+    return data.get("notes", []), None
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +199,21 @@ async def _process_text(
     text = "\n\n".join(texts)
     await context.bot.send_message(chat_id, MESSAGES["processing"][lang])
     try:
-        notes = await ingest(text)
+        notes, error = await ingest(text)
+        if error:
+            status = error.get("status")
+            message = error.get("message")
+            if status and 500 <= status < 600:
+                user_msg = MESSAGES["service_unavailable"][lang]
+            elif status and 400 <= status < 500:
+                user_msg = MESSAGES["request_rejected"][lang]
+            else:
+                user_msg = MESSAGES["error"][lang].format(error=message)
+            dev_info = MESSAGES["dev_info"][lang].format(
+                info=f"ingest service: {status} {message}"
+            )
+            await context.bot.send_message(chat_id, f"{user_msg}\n{dev_info}")
+            return
         if notes:
             settings = get_settings()
             if settings.public_url:
@@ -206,9 +233,9 @@ async def _process_text(
             chat_id, reply, disable_web_page_preview=True
         )
     except Exception as exc:  # pragma: no cover - network errors
-        await context.bot.send_message(
-            chat_id, MESSAGES["error"][lang].format(error=exc)
-        )
+        user_msg = MESSAGES["error"][lang].format(error=exc)
+        dev_info = MESSAGES["dev_info"][lang].format(info="bot: _process_text")
+        await context.bot.send_message(chat_id, f"{user_msg}\n{dev_info}")
 
 
 # ---------------------------------------------------------------------------
