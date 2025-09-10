@@ -1,20 +1,12 @@
 FROM python:3.11-slim
 
 WORKDIR /app
+
+COPY requirements-api.txt ./
+RUN pip install --no-cache-dir -r requirements-api.txt
+
 COPY libs ./libs
 COPY apps/api ./apps/api
-
-RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn[standard] \
-    python-telegram-bot \
-    replicate \
-    requests \
-    sqlalchemy \
-    pydantic-settings \
-    "psycopg[binary]" \
-    pymilvus==2.6.1 \
-    alembic
 
 ENV PYTHONPATH=/app
 EXPOSE 8000
