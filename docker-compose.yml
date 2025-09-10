@@ -2,6 +2,13 @@ x-log-env: &log-env
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
 services:
+  baseimage:
+    build:
+      context: .
+      dockerfile: infra/docker/base.Dockerfile
+    image: baseknowledge-base:latest
+    environment:
+      <<: *log-env
   api:
     build:
       context: .
