@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM baseknowledge-base:latest
 
 WORKDIR /app
 
