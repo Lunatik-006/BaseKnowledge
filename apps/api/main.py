@@ -133,6 +133,12 @@ async def startup() -> None:
     await init_db()
 
 
+@app.get("/health")
+def health() -> Dict[str, str]:
+    """Health check endpoint used by docker-compose."""
+    return {"status": "ok"}
+
+
 # Factory dependencies for use cases -------------------------------------------------
 
 async def ingest_text_uc(

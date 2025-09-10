@@ -7,6 +7,12 @@ def test_ingest_text_endpoint(client):
     assert note["content"] == "hello"
 
 
+def test_health_endpoint(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_ingest_text_missing_milvus_uri(client, monkeypatch):
     from types import SimpleNamespace
     from apps.api import main
