@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """Database setup for SQLAlchemy with async psycopg driver."""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -46,7 +47,12 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 async def init_db() -> None:
-    """Create tables and add missing columns if necessary."""
+    """Create tables and add missing columns if necessary.
+
+    Attempts to connect to the database multiple times with a delay
+    between attempts. Only after a successful connection will the tables be
+    created. If all attempts fail, the last exception is propagated.
+    """
 
     async def sync_init(sync_conn):  # type: ignore[override]
         Base.metadata.create_all(sync_conn)
@@ -55,14 +61,35 @@ async def init_db() -> None:
             existing = {col["name"] for col in inspector.get_columns(table.name)}
             for column in table.columns:
                 if column.name not in existing:
-                    col_ddl = CreateColumn(column.copy()).compile(dialect=sync_conn.dialect)
-                    sync_conn.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {col_ddl}"))
+                    col_ddl = CreateColumn(column.copy()).compile(
+                        dialect=sync_conn.dialect
+                    )
+                    sync_conn.execute(
+                        text(f"ALTER TABLE {table.name} ADD COLUMN {col_ddl}")
+                    )
 
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(sync_init)
-    except SQLAlchemyError as exc:  # pragma: no cover - best effort
-        logging.getLogger(__name__).warning("DB init skipped: %s", exc)
+    max_attempts = 5
+    delay = 5
+    logger = logging.getLogger(__name__)
+    last_exc: SQLAlchemyError | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(sync_init)
+            return
+        except SQLAlchemyError as exc:  # pragma: no cover - best effort
+            last_exc = exc
+            if attempt == max_attempts:
+                break
+            logger.warning(
+                "DB init attempt %d failed: %s. Retrying in %ds", attempt, exc, delay
+            )
+            await asyncio.sleep(delay)
+
+    logger.error("DB init failed after %d attempts", max_attempts)
+    if last_exc is not None:
+        raise last_exc
 
 
 __all__ = ["Base", "engine", "SessionLocal", "get_session", "init_db"]
