@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         # Allow environment variables that don't have a matching field.
         # This makes the settings more robust when extra variables are
-        # present in the environment (e.g. NEXT_PUBLIC_API_URL).
+        # present in the environment (e.g. PUBLIC_URL used by miniapp build).
         extra="ignore",
     )
 

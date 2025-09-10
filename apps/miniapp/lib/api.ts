@@ -1,6 +1,11 @@
 import { getInitData } from './telegram';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Prefer PUBLIC_URL and route API calls through /api via nginx.
+// Fallback to local dev API when PUBLIC_URL is not defined.
+const PUBLIC_URL = process.env.PUBLIC_URL;
+const API_BASE_URL = PUBLIC_URL
+  ? `${PUBLIC_URL.replace(/\/$/, '')}/api`
+  : 'http://localhost:8000';
 
 function authHeaders(extra: HeadersInit = {}): HeadersInit {
   const initData = getInitData();

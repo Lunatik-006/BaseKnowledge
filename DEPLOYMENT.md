@@ -41,7 +41,7 @@
    - `LOG_LEVEL=INFO`
 
    Необязательные (при необходимости):
-   - `PUBLIC_URL=https://your.domain`
+  - `PUBLIC_URL=https://your.domain` (публичный адрес сайта; API будет доступен по `${PUBLIC_URL}/api`)
    - `TELEGRAM_WEBHOOK_SECRET=...`
    - `MILVUS_URI=http://milvus:19530` (используется по умолчанию внутри контейнеров)
 
@@ -69,7 +69,7 @@
   - `SSH_PORT` — порт SSH (по умолчанию `22`)
   - `SSH_KEY` — приватный ключ в формате PEM (соответствующий открытому ключу в `~/.ssh/authorized_keys` сервера)
 - Для MiniApp build:
-  - `NEXT_PUBLIC_API_URL` — публичный URL API (например, `https://your.domain`)
+  - `PUBLIC_URL` — публичный URL сайта (например, `https://your.domain`). Клиент обращается к API по адресу `${PUBLIC_URL}/api`.
 - Для pull на сервере:
   - `GHCR_USERNAME`, `GHCR_TOKEN` — см. раздел выше
 
@@ -105,4 +105,3 @@
 - `deploy.sh` обновляет репозиторий и применяет конфигурацию без ручных шагов.
 
 Готово: после push в `main` CI соберёт и опубликует образы, а CD обновит сервер автоматически.
-

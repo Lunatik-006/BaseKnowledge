@@ -82,7 +82,8 @@ async def ingest(text: str) -> Tuple[List[dict], Optional[dict]]:
     """Send text to the API and return list of created notes."""
 
     settings = get_settings()
-    url = f"{settings.public_url}/ingest/text"
+    # Public URL should point to the site root; API is exposed under /api via nginx
+    url = f"{settings.public_url}/api/ingest/text"
     token = settings.bot_api_token
     headers = {"X-Bot-Api-Token": token} if token else None
     try:
@@ -110,9 +111,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton(
-                        MESSAGES["open_app"][lang], url=f"{settings.public_url}/miniapp"
-                    )
+                    InlineKeyboardButton(MESSAGES["open_app"][lang], url=f"{settings.public_url}/miniapp")
                 ]
             ]
         )
@@ -222,9 +221,8 @@ async def _process_text(
                     f"- [{n['title']}]({settings.public_url}/miniapp?note={n['id']})"
                     for n in notes
                 ]
-                lines.append(
-                    f"{MESSAGES['zip'][lang]}: {settings.public_url}/export/zip"
-                )
+                # ZIP export is an API endpoint exposed via /api
+                lines.append(f"{MESSAGES['zip'][lang]}: {settings.public_url}/api/export/zip")
             else:
                 lines = [f"- {n['title']}" for n in notes]
             reply = MESSAGES["done"][lang] + "\n" + "\n".join(lines)

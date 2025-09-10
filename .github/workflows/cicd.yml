@@ -59,10 +59,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx (local driver)
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
+        # Use default docker-container driver to enable GHA cache export
+        # (cache export is not supported for the local docker driver)
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -137,7 +137,7 @@ jobs:
           tags: ${{ steps.meta_mini.outputs.tags }}
           labels: ${{ steps.meta_mini.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+            PUBLIC_URL=${{ secrets.PUBLIC_URL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

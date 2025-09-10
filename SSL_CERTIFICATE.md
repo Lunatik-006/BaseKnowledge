@@ -7,7 +7,6 @@
 1. В файле `.env` укажите публичные адреса сервиса, например:
    ```env
    PUBLIC_URL=https://mindweaver.online
-   NEXT_PUBLIC_API_URL=https://mindweaver.online
    ```
 2. Убедитесь, что порты `80` и `443` вашего сервера открыты и направлены на хост с Docker.
 

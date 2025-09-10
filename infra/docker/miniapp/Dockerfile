@@ -3,8 +3,9 @@ WORKDIR /app
 COPY apps/miniapp/package*.json ./
 RUN npm ci
 COPY apps/miniapp .
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# PUBLIC_URL is used by Next via next.config.ts (env mapping)
+ARG PUBLIC_URL
+ENV PUBLIC_URL=$PUBLIC_URL
 RUN npm run build && npm prune --production
 
 FROM node:20-alpine
