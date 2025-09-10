@@ -1,3 +1,6 @@
+x-log-env: &log-env
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
 services:
   api:
     build:
@@ -16,6 +19,8 @@ services:
       - ./config/prompts.yaml:/app/config/prompts.yaml:ro
     networks:
       - api
+    environment:
+      <<: *log-env
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -36,6 +41,8 @@ services:
       - "3000:3000"
     networks:
       - miniapp
+    environment:
+      <<: *log-env
   bot:
     build:
       context: .
@@ -52,10 +59,13 @@ services:
       retries: 3
     networks:
       - api
+    environment:
+      <<: *log-env
   postgres:
     image: postgres:15
     restart: unless-stopped
     environment:
+      <<: *log-env
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-baseknowledge}
@@ -71,6 +81,7 @@ services:
     # and Docker keeps restarting the service (see README for details).
     command: ["milvus", "run", "standalone"]
     environment:
+      <<: *log-env
       DEPLOY_MODE: STANDALONE
       ETCD_USE_EMBED: "true"
       ETCD_DATA_DIR: /var/lib/milvus/etcd
@@ -105,6 +116,8 @@ services:
     networks:
       - api
       - miniapp
+    environment:
+      <<: *log-env
 
   letsencrypt:
     image: certbot/certbot
@@ -118,6 +131,8 @@ services:
     networks:
       - api
       - miniapp
+    environment:
+      <<: *log-env
 volumes:
   postgres_data:
   milvus_data:
