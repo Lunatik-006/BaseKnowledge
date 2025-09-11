@@ -9,7 +9,7 @@ services:
       - .env
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       milvus:
         condition: service_healthy
     ports:
@@ -71,6 +71,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-baseknowledge}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   milvus:
     image: milvusdb/milvus:v2.6.1
     restart: unless-stopped

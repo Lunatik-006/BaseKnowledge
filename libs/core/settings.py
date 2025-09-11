@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = Field(default="")
     milvus_uri: str = Field(default="")
     postgres_uri: str = Field(
-        default="postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
+        # Default for in-container networking: use the Docker service name
+        # and the project database set in docker-compose (.env provides defaults).
+        default="postgresql+psycopg://postgres:postgres@postgres:5432/baseknowledge"
     )
     vault_dir: Path = Field(default=Path("/tmp/vault"))
     log_level: str = Field(default="INFO")
