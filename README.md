@@ -150,47 +150,6 @@ END $$;
 SQL'
 ```
 
-Вариант B: для внешнего PostgreSQL
-
-```bash
-# Пример: задайте свои хост/пользователь/пароль/БД
-psql "host=HOST user=USER password=PASS port=5432 dbname=baseknowledge" -v ON_ERROR_STOP=1 <<'SQL'
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  telegram_id INTEGER UNIQUE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS notes (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  tags TEXT[] DEFAULT ARRAY[]::TEXT[],
-  topic_id TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  file_path TEXT NOT NULL,
-  source_url TEXT,
-  author TEXT,
-  dt TIMESTAMPTZ,
-  channel TEXT
-);
-
-CREATE TABLE IF NOT EXISTS chunks (
-  id TEXT PRIMARY KEY,
-  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-  pos INTEGER NOT NULL,
-  anchor TEXT
-);
-
-DO $$ BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'ix_chunks_note_pos'
-  ) THEN
-    CREATE INDEX ix_chunks_note_pos ON chunks (note_id, pos);
-  END IF;
-END $$;
-SQL
-```
-
 После создания таблиц можно запускать весь стек (`docker compose up -d`). Если в будущем в моделях появятся новые поля, API на старте добавит недостающие колонки автоматически.
 
 ## Настройка БД (drop‑in)
@@ -236,20 +195,6 @@ API на старте выполнит проверку и создаст нед
   curl -s -H "X-Bot-Api-Token: $BOT_API_TOKEN" http://localhost:8000/auth/telegram
   ```
 
-Если используете внешний PostgreSQL (RDS/Cloud/отдельный инстанс):
-
-- Задайте `POSTGRES_URI` в `.env`, например:
-
-  ```
-  POSTGRES_URI=postgresql+psycopg://user:pass@host:5432/baseknowledge
-  ```
-
-- Один раз создайте базу (снаружи, любым удобным способом):
-
-  ```bash
-  psql "host=host user=user password=pass port=5432 dbname=postgres" -c "CREATE DATABASE baseknowledge;"
-  ```
-
 После этого запускайте контейнеры. API сам доведёт схему до нужного состояния.
 
 После этого `docker compose logs` покажет единообразные сообщения.
@@ -266,21 +211,6 @@ curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=ht
 - 2 vCPU
 - 8 GB RAM
 - 20 GB свободного места на диске
-
-## Примеры запросов
-### POST /ingest/text
-```bash
-curl -X POST http://localhost:8000/ingest/text \
-  -H 'Content-Type: application/json' \
-  -d '{"text": "Пример заметки"}'
-```
-
-### POST /search
-```bash
-curl -X POST http://localhost:8000/search \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "что такое docker"}'
-```
 
 ## План масштабирования
 - Выделить воркеров для тяжёлой индексации и фоновых задач.
