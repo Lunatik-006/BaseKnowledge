@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy import inspect, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -46,6 +47,41 @@ async def get_session() -> AsyncIterator[AsyncSession]:
             raise
 
 
+async def _ensure_database_exists(database_url: str) -> None:
+    """Ensure target PostgreSQL database exists; create it if missing.
+
+    Connects to the server-level "postgres" database and issues
+    `CREATE DATABASE <name>` when the target database is absent.
+    """
+
+    url = make_url(database_url)
+    target_db = url.database or "postgres"
+    # Connect to the default admin DB to manage databases
+    admin_url = url.set(database="postgres")
+
+    admin_engine: AsyncEngine = create_async_engine(
+        admin_url, echo=False, future=True, isolation_level="AUTOCOMMIT"
+    )
+    try:
+        async with admin_engine.connect() as conn:
+            res = await conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :db"),
+                {"db": target_db},
+            )
+            exists = res.scalar_one_or_none() is not None
+            if not exists:
+                owner = url.username or "postgres"
+                # CREATE DATABASE cannot be parametrized for identifiers
+                await conn.execute(
+                    text(
+                        f'CREATE DATABASE "{target_db}" OWNER "{owner}" '
+                        "ENCODING 'UTF8' TEMPLATE template0"
+                    )
+                )
+    finally:
+        await admin_engine.dispose()
+
+
 async def init_db() -> None:
     """Create tables and add missing columns if necessary.
 
@@ -75,6 +111,8 @@ async def init_db() -> None:
 
     for attempt in range(1, max_attempts + 1):
         try:
+            # Ensure the database itself exists before creating tables
+            await _ensure_database_exists(DATABASE_URL)
             async with engine.begin() as conn:
                 await conn.run_sync(sync_init)
             return
