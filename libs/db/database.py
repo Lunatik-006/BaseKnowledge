@@ -55,6 +55,9 @@ async def _ensure_database_exists(database_url: str) -> None:
     """
 
     url = make_url(database_url)
+    # Only applicable for PostgreSQL backends; skip for SQLite and others
+    if url.get_backend_name() != "postgresql":
+        return
     target_db = url.database or "postgres"
     # Connect to the default admin DB to manage databases
     admin_url = url.set(database="postgres")

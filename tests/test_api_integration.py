@@ -35,7 +35,8 @@ def test_ingest_text_missing_milvus_uri(client, monkeypatch):
             telegram_bot_token="",
             public_url="",
             telegram_webhook_secret="",
-            postgres_uri="postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
+            # Keep tests DB in-memory SQLite to avoid network
+            postgres_uri="sqlite+aiosqlite:///:memory:",
         ),
     )
     # The VectorIndex class imports get_settings from its own module, so we

@@ -60,6 +60,17 @@ except Exception:  # pragma: no cover - if pymilvus missing
     pass
 
 from apps.api.main import app, get_storage, ingest_text_uc, search_uc, current_user
+
+# Disable DB init on app startup during tests
+try:
+    import apps.api.main as main  # re-import as module for monkeypatching
+
+    async def _noop_init_db():  # pragma: no cover - test-only stub
+        return None
+
+    main.init_db = _noop_init_db  # type: ignore[assignment]
+except Exception:  # pragma: no cover - safety
+    pass
 from libs.storage import NotesStorage, Note
 
 
