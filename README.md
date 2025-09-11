@@ -359,3 +359,13 @@ graph TD
     IMG[Фото с текстом] -.->|/ingest/image (OCR)| API
   end
 ```
+
+## Документация (docs)
+- Гайд по Replicate API: `docs/replicate-gpt5-python-how-to-use.md` (ссылки на схемы входа/выхода и промпт‑конфиг)
+- Схемы моделей:
+  - `docs/gpt-5-nano-input-schema.json`
+  - `docs/gpt-5-structured-input-schema.json`
+  - `docs/gpt-5-output-schema.json`
+- Техническая спецификация: `docs/Technical Specification.md`
+- Деплой: `docs/DEPLOYMENT.md`
+- TLS/сертификат: `docs/SSL_CERTIFICATE.md`
