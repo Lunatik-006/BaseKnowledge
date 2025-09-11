@@ -1,8 +1,10 @@
 """Telegram bot entry point.
 
-Implements basic /start and /mode commands, message buffering in Curate mode
-and forwarding of collected text to the API as described in the technical
-specification (sections 5 and 9).
+Implements /start, /mode and /help, Curate mode buffering, and forwarding of
+collected text to the API as described in the technical specification.
+Adds:
+- persistent reply keyboard with command buttons and Mini App button (WebApp)
+- chat menu button configured to open the Mini App inside Telegram
 """
 
 from __future__ import annotations
@@ -12,7 +14,16 @@ import hashlib
 from typing import List, Optional, Tuple
 
 import httpx
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    Update,
+    WebAppInfo,
+    BotCommand,
+    MenuButtonWebApp,
+)
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -31,22 +42,48 @@ from libs.logging import setup_logging
 
 MESSAGES = {
     "start": {
-        "en": "Send me a message or forward posts – I will create notes.",
-        "ru": "Отправь сообщение или перешли посты — я создам заметки.",
+        "en": (
+            "Hi! I can turn your messages and forwarded posts into structured notes.\n"
+            "- Type or forward text to create notes\n"
+            "- Use /mode to switch One-to-One vs Curate (batch 60s)\n"
+            "- Tap the Mini App to browse notes, search, and export ZIP"
+        ),
+        "ru": (
+            "Привет! Я превращаю ваши сообщения и пересланные посты в структурированные заметки.\n"
+            "- Напишите или перешлите текст, чтобы создать заметки\n"
+            "- Используйте /mode для переключения режимов One-to-One и Curate (пакет 60с)\n"
+            "- Откройте Mini App, чтобы просматривать, искать и выгружать ZIP"
+        ),
+    },
+    "help": {
+        "en": (
+            "Commands:\n"
+            "/start — welcome and menu\n"
+            "/mode — toggle One-to-One vs Curate (buffers 60s)\n"
+            "/help — this help\n\n"
+            "Tips: In Curate mode messages are deduplicated and processed together."
+        ),
+        "ru": (
+            "Команды:\n"
+            "/start — приветствие и меню\n"
+            "/mode — переключение режимов One-to-One и Curate (буфер 60с)\n"
+            "/help — эта справка\n\n"
+            "Подсказка: в режиме Curate сообщения дедуплицируются и обрабатываются вместе."
+        ),
     },
     "open_app": {"en": "Open Mini App", "ru": "Открыть Mini App"},
-    "mode_one": {"en": "Mode: One-to-One", "ru": "Режим: Один к одному"},
+    "mode_one": {"en": "Mode: One-to-One", "ru": "Режим: One-to-One"},
     "mode_curate": {
         "en": "Mode: Curate. Messages are buffered for 60s.",
-        "ru": "Режим: Curate. Сообщения копятся 60 секунд.",
+        "ru": "Режим: Curate. Сообщения буферизуются 60 секунд.",
     },
     "buffered": {
         "en": "Saved. Send more or press 'Process now'.",
-        "ru": "Сохранил. Пришли ещё или нажми «Обработать сейчас».",
+        "ru": "Сохранено. Отправьте ещё или нажмите ‘Обработать сейчас’.",
     },
     "process_now": {"en": "Process now", "ru": "Обработать сейчас"},
-    "processing": {"en": "Processing…", "ru": "Обработка…"},
-    "done": {"en": "Notes created:", "ru": "Созданные заметки:"},
+    "processing": {"en": "Processing…", "ru": "Обрабатываю…"},
+    "done": {"en": "Notes created:", "ru": "Заметки созданы:"},
     "zip": {"en": "Download ZIP", "ru": "Скачать ZIP"},
     "error": {"en": "Error: {error}", "ru": "Ошибка: {error}"},
     "service_unavailable": {
@@ -56,7 +93,7 @@ MESSAGES = {
     "request_rejected": {"en": "Request rejected", "ru": "Запрос отклонён"},
     "dev_info": {
         "en": "info for developers: {info}",
-        "ru": "инфо для разработчика: {info}",
+        "ru": "информация для разработчиков: {info}",
     },
     "no_text": {"en": "Text is empty", "ru": "Текст пуст"},
     "no_notes": {"en": "No notes created", "ru": "Заметки не созданы"},
@@ -74,6 +111,21 @@ def _get_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     return lang
 
 
+def _build_reply_keyboard(lang: str, webapp_url: str | None) -> ReplyKeyboardMarkup | None:
+    """Build a persistent reply keyboard with command shortcuts and Mini App."""
+
+    rows = [[KeyboardButton("/mode"), KeyboardButton("/help")]]
+    if webapp_url:
+        rows.append(
+            [
+                KeyboardButton(
+                    text=MESSAGES["open_app"][lang], web_app=WebAppInfo(url=webapp_url)
+                )
+            ]
+        )
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, one_time_keyboard=False)
+
+
 # ---------------------------------------------------------------------------
 # API interaction
 
@@ -82,7 +134,6 @@ async def ingest(text: str) -> Tuple[List[dict], Optional[dict]]:
     """Send text to the API and return list of created notes."""
 
     settings = get_settings()
-    # Public URL should point to the site root; API is exposed under /api via nginx
     url = f"{settings.public_url}/api/ingest/text"
     token = settings.bot_api_token
     headers = {"X-Bot-Api-Token": token} if token else None
@@ -106,26 +157,50 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     lang = _get_lang(update, context)
     settings = get_settings()
-    keyboard = None
-    if settings.public_url:
-        keyboard = InlineKeyboardMarkup(
+    webapp_url = f"{settings.public_url}/miniapp" if settings.public_url else None
+
+    # Inline keyboard with a native WebApp button (opens inside Telegram)
+    inline_keyboard = None
+    if webapp_url:
+        inline_keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton(MESSAGES["open_app"][lang], url=f"{settings.public_url}/miniapp")
+                    InlineKeyboardButton(
+                        MESSAGES["open_app"][lang], web_app=WebAppInfo(url=webapp_url)
+                    )
                 ]
             ]
         )
-    await update.message.reply_text(MESSAGES["start"][lang], reply_markup=keyboard)
+
+    # Persistent reply keyboard with commands and Mini App button
+    reply_keyboard = _build_reply_keyboard(lang, webapp_url)
+
+    await update.message.reply_text(
+        MESSAGES["start"][lang], reply_markup=reply_keyboard or inline_keyboard
+    )
+    # If both are available, add an extra message with inline button for convenience
+    if reply_keyboard and inline_keyboard:
+        await update.message.reply_text(MESSAGES["open_app"][lang], reply_markup=inline_keyboard)
 
 
 async def mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Toggle between one-to-one and Curate modes."""
+    """Toggle between one-to-one and Curate mode."""
 
     lang = _get_lang(update, context)
-    current = context.user_data.get("mode", "one")
-    new_mode = "curate" if current != "curate" else "one"
-    context.user_data["mode"] = new_mode
-    await update.message.reply_text(MESSAGES[f"mode_{new_mode}"][lang])
+    mode = context.user_data.get("mode", "one")
+    if mode == "curate":
+        context.user_data["mode"] = "one"
+        await update.message.reply_text(MESSAGES["mode_one"][lang])
+    else:
+        context.user_data["mode"] = "curate"
+        await update.message.reply_text(MESSAGES["mode_curate"][lang])
+
+
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show help and commands list."""
+
+    lang = _get_lang(update, context)
+    await update.message.reply_text(MESSAGES["help"][lang])
 
 
 async def process_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -249,9 +324,34 @@ def main() -> None:
     if not token:
         raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
 
-    app = Application.builder().token(token).build()
+    async def _post_init(app: Application) -> None:
+        # Register bot commands in EN and RU
+        en_cmds = [
+            BotCommand("start", "Welcome and menu"),
+            BotCommand("mode", "Toggle One-to-One/Curate"),
+            BotCommand("help", "Usage and features"),
+        ]
+        ru_cmds = [
+            BotCommand("start", "Старт и меню"),
+            BotCommand("mode", "Переключение One-to-One/Curate"),
+            BotCommand("help", "Справка и команды"),
+        ]
+        await app.bot.set_my_commands(en_cmds)
+        await app.bot.set_my_commands(ru_cmds, language_code="ru")
+
+        # Set the Telegram chat menu button to open the Mini App (native WebApp)
+        if settings.public_url:
+            await app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text=MESSAGES["open_app"]["en"],
+                    web_app=WebAppInfo(url=f"{settings.public_url}/miniapp"),
+                )
+            )
+
+    app = Application.builder().token(token).post_init(_post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("mode", mode))
+    app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CallbackQueryHandler(process_now_cb, pattern="^process$"))
     # Separate handler for forwarded text messages
     app.add_handler(
@@ -262,8 +362,6 @@ def main() -> None:
         MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.FORWARDED, handle_text)
     )
 
-    # ``run_polling`` handles initialization, starting and graceful shutdown,
-    # so we don't need to access the updater directly.
     app.run_polling()
 
 

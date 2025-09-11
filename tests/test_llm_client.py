@@ -3,7 +3,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import requests
 
 # Stub settings with fake token
 class DummySettings(SimpleNamespace):
@@ -20,28 +19,27 @@ def make_client() -> ReplicateLLMClient:
 def test_call_success(monkeypatch):
     client = make_client()
 
-    def fake_post(url, json, timeout):
-        class Resp:
-            status_code = 200
-            def raise_for_status(self):
-                pass
-            def json(self):
-                return {"choices": [{"message": {"content": "ok"}}]}
-        return Resp()
+    # Simulate streaming iterator returned by replicate.run
+    def fake_run(model, input):
+        return iter(["o", "k"])
 
-    monkeypatch.setattr(client.session, "post", fake_post)
-    assert client._call("model", []) == "ok"
+    import libs.llm.replicate_client as rc
+
+    monkeypatch.setattr(rc.replicate, "run", fake_run)
+    assert client._call("openai/gpt-5-structured", []) == "ok"
 
 
-def test_call_timeout(monkeypatch):
+def test_call_failure(monkeypatch):
     client = make_client()
 
-    def fake_post(url, json, timeout):
-        raise requests.Timeout()
+    def fake_run(model, input):
+        raise RuntimeError("boom")
 
-    monkeypatch.setattr(client.session, "post", fake_post)
+    import libs.llm.replicate_client as rc
+
+    monkeypatch.setattr(rc.replicate, "run", fake_run)
     with pytest.raises(LLMClientError):
-        client._call("model", [])
+        client._call("openai/gpt-5-structured", [])
 
 
 def test_generate_structured_notes(monkeypatch):

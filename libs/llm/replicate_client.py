@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, Iterator, List, Union
 
-import requests
+import replicate
 import yaml
 
 from libs.core.settings import Settings, get_settings
@@ -25,14 +25,7 @@ class ReplicateLLMClient(LLMClient):
         prompts_path: str | Path | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self.timeout = timeout
-        self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "Authorization": f"Bearer {self.settings.replicate_api_token}",
-                "Content-Type": "application/json",
-            }
-        )
+        self.timeout = timeout  # reserved for future granular timeouts
 
         self.prompts_path = (
             Path(prompts_path)
@@ -57,22 +50,49 @@ class ReplicateLLMClient(LLMClient):
                 f"Prompt '{section}.{key}' not found in {self.prompts_path}"
             ) from exc
 
-    def _call(self, model: str, messages: List[Dict[str, str]]) -> str:
-        url = (
-            f"https://api.replicate.com/v1/models/{model}/chat/completions"
-        )
-        payload = {"messages": messages}
+    def _join_output(self, out: Union[str, Iterable[str], None]) -> str:
+        if out is None:
+            return ""
+        if isinstance(out, str):
+            return out
         try:
-            response = self.session.post(url, json=payload, timeout=self.timeout)
-            response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"]
-        except requests.Timeout as exc:
-            raise LLMClientError("Replicate request timed out") from exc
-        except requests.RequestException as exc:
+            return "".join(list(out))  # type: ignore[arg-type]
+        except Exception as exc:  # pragma: no cover - defensive
+            raise LLMClientError("Unexpected streaming output from Replicate") from exc
+
+    def _call(self, model: str, messages: List[Dict[str, str]]) -> str:
+        """Call Replicate model using the official client per guide.
+
+        - For gpt-5-structured, tokens param is `max_output_tokens`.
+        - For gpt-5-nano, tokens param is `max_completion_tokens`.
+        """
+        try:
+            if model.endswith("gpt-5-structured"):
+                out = replicate.run(
+                    model,
+                    input={
+                        "messages": messages,
+                        "reasoning_effort": "minimal",
+                        "verbosity": "low",
+                        "max_output_tokens": 900,
+                    },
+                )
+            else:
+                out = replicate.run(
+                    model,
+                    input={
+                        "messages": messages,
+                        "reasoning_effort": "minimal",
+                        "verbosity": "low",
+                        "max_completion_tokens": 900,
+                    },
+                )
+            text = self._join_output(out)
+            if not isinstance(text, str):  # pragma: no cover - safety
+                raise LLMClientError("Unexpected response type from Replicate")
+            return text
+        except Exception as exc:
             raise LLMClientError(f"Replicate request failed: {exc}") from exc
-        except (KeyError, ValueError) as exc:
-            raise LLMClientError("Unexpected response from Replicate") from exc
 
     def generate_structured_notes(self, text: str) -> List[Dict[str, Any]]:
         user_prompt = self._prompt("insights", "user").format(raw_text=text)
