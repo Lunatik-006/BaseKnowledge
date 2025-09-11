@@ -15,12 +15,18 @@ from libs.core.settings import get_settings
 class VectorIndex:
     """Wrapper around Milvus vector store."""
 
-    def __init__(self, uri: str | None = None, dim: int = 768, create_notes_meta: bool = False) -> None:
-        self.dim = dim
+    def __init__(
+        self,
+        uri: str | None = None,
+        dim: int | None = None,
+        create_notes_meta: bool = False,
+    ) -> None:
+        # Resolve configuration from settings if not explicitly provided
+        settings = get_settings()
+        self.dim = dim if dim is not None else getattr(settings, "embedding_dim", 768)
         if uri:
             self.uri = uri
         else:
-            settings = get_settings()
             self.uri = settings.milvus_uri
         if not self.uri:
             raise RuntimeError("MILVUS_URI is not set")
@@ -44,10 +50,37 @@ class VectorIndex:
     # Internal helpers -------------------------------------------------
     def _ensure_chunks_collection(self) -> None:
         if utility.has_collection(self.chunks_collection):
-            return
+            # Validate schema: ensure primary key is VARCHAR and embedding dim matches
+            try:
+                existing = Collection(self.chunks_collection)
+                fields = {f.name: f for f in existing.schema.fields}
+                cid = fields.get("chunk_id")
+                emb = fields.get("embedding")
+                cid_ok = getattr(cid, "dtype", None) == DataType.VARCHAR
+                # dim may be exposed differently depending on pymilvus version
+                emb_dim = getattr(emb, "dim", None)
+                if emb_dim is None:
+                    params = getattr(emb, "params", None) or getattr(emb, "type_params", {})
+                    emb_dim = int(params.get("dim")) if isinstance(params, dict) and params.get("dim") else None
+                dim_ok = emb_dim == self.dim if emb_dim is not None else True
+                if cid_ok and dim_ok:
+                    return
+                # Drop incompatible collection and recreate
+                existing.release()
+                utility.drop_collection(self.chunks_collection)
+            except Exception:
+                # If we cannot introspect the schema (e.g., in tests with stubs),
+                # assume it's compatible and skip recreation.
+                return
 
+        # Use string IDs to match our DB schema (UUID strings)
         fields = [
-            FieldSchema(name="chunk_id", dtype=DataType.INT64, is_primary=True, auto_id=False),
+            FieldSchema(
+                name="chunk_id",
+                dtype=DataType.VARCHAR,
+                is_primary=True,
+                max_length=64,
+            ),
             FieldSchema(name="note_id", dtype=DataType.VARCHAR, max_length=64),
             FieldSchema(name="pos", dtype=DataType.INT64),
             FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=2048),

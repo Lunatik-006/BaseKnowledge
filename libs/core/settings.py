@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     public_url: str = Field(default="")
     telegram_webhook_secret: str = Field(default="")
     milvus_uri: str = Field(default="")
+    # Embeddings configuration
+    embeddings_model: str = Field(default="nomic-ai/nomic-embed-text-v1.5")
+    embedding_dim: int = Field(default=768)
     postgres_uri: str = Field(
         # Default for in-container networking: use the Docker service name
         # and the project database set in docker-compose (.env provides defaults).

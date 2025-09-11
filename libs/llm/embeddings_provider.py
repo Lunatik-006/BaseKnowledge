@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 import replicate
+from libs.core.settings import get_settings
 
 
 class EmbeddingsProvider:
@@ -10,14 +11,20 @@ class EmbeddingsProvider:
 
     def __init__(
         self,
-        model: str = "nateraw/bge-m3",
+        model: str | None = None,
         *,
-        embedding_dim: int = 768,
+        embedding_dim: int | None = None,
         batch_size: int = 32,
         enable_cache: bool = True,
     ) -> None:
-        self.model = model
-        self.embedding_dim = embedding_dim
+        settings = get_settings()
+        # Allow overriding via args; otherwise pull from settings with sane defaults
+        self.model = model or getattr(
+            settings, "embeddings_model", "nomic-ai/nomic-embed-text-v1.5"
+        )
+        self.embedding_dim = (
+            embedding_dim if embedding_dim is not None else getattr(settings, "embedding_dim", 768)
+        )
         self.batch_size = batch_size
         self.enable_cache = enable_cache
         self._cache: Dict[str, List[float]] = {}

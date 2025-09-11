@@ -195,6 +195,8 @@ async def ingest_text(
         }
         return JSONResponse(status_code=status.HTTP_201_CREATED, content=result)
     except Exception as exc:  # pragma: no cover - generic error
+        import logging
+        logging.exception("ingest_text failed")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
 
@@ -220,6 +222,8 @@ def search(
         filtered_items = [item for item in items if item]
         return {"answer_md": answer_md, "items": filtered_items}
     except Exception as exc:  # pragma: no cover - generic error
+        import logging
+        logging.exception("search failed")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
 

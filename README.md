@@ -103,6 +103,96 @@ BaseKnowledge — сервис для структурирования личн�
 LOG_LEVEL=DEBUG docker compose up
 ```
 
+## Создание таблиц вручную
+
+Если хотите заранее создать таблицы в базе (без ожидания автосоздания схемы на старте API), выполните один из вариантов ниже.
+
+Вариант A: через контейнер `postgres` (docker compose)
+
+```bash
+docker compose exec -T postgres bash -lc 'cat <<'\''SQL'\'' | \
+  psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-baseknowledge}" -v ON_ERROR_STOP=1
+-- Основные таблицы
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  telegram_id INTEGER UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS notes (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+  topic_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  file_path TEXT NOT NULL,
+  source_url TEXT,
+  author TEXT,
+  dt TIMESTAMPTZ,
+  channel TEXT
+);
+
+CREATE TABLE IF NOT EXISTS chunks (
+  id TEXT PRIMARY KEY,
+  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+  pos INTEGER NOT NULL,
+  anchor TEXT
+);
+
+-- Рекомендуемые индексы
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'ix_chunks_note_pos'
+  ) THEN
+    CREATE INDEX ix_chunks_note_pos ON chunks (note_id, pos);
+  END IF;
+END $$;
+SQL'
+```
+
+Вариант B: для внешнего PostgreSQL
+
+```bash
+# Пример: задайте свои хост/пользователь/пароль/БД
+psql "host=HOST user=USER password=PASS port=5432 dbname=baseknowledge" -v ON_ERROR_STOP=1 <<'SQL'
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  telegram_id INTEGER UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS notes (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  tags TEXT[] DEFAULT ARRAY[]::TEXT[],
+  topic_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  file_path TEXT NOT NULL,
+  source_url TEXT,
+  author TEXT,
+  dt TIMESTAMPTZ,
+  channel TEXT
+);
+
+CREATE TABLE IF NOT EXISTS chunks (
+  id TEXT PRIMARY KEY,
+  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+  pos INTEGER NOT NULL,
+  anchor TEXT
+);
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'ix_chunks_note_pos'
+  ) THEN
+    CREATE INDEX ix_chunks_note_pos ON chunks (note_id, pos);
+  END IF;
+END $$;
+SQL
+```
+
+После создания таблиц можно запускать весь стек (`docker compose up -d`). Если в будущем в моделях появятся новые поля, API на старте добавит недостающие колонки автоматически.
+
 ## Настройка БД (drop‑in)
 
 По умолчанию `docker-compose.yml` поднимает контейнер `postgres` и создаёт базу с именем из `POSTGRES_DB` при первом запуске. Авто‑создание самой базы в коде удалено: теперь код лишь гарантирует наличие схемы (таблиц/колонок) в уже существующей базе при старте API.

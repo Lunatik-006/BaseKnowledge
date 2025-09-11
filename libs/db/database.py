@@ -71,6 +71,16 @@ async def init_db() -> None:
                     sync_conn.execute(
                         text(f"ALTER TABLE {table.name} ADD COLUMN {col_ddl}")
                     )
+        # Optional: create recommended indexes in Postgres
+        try:
+            if sync_conn.dialect.name == "postgresql":
+                sync_conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_chunks_note_pos ON chunks (note_id, pos)"
+                    )
+                )
+        except Exception:  # pragma: no cover - best effort only
+            pass
 
     max_attempts = 5
     delay = 5
