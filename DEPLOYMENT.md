@@ -83,7 +83,7 @@
    - Публикует в `ghcr.io/<ORG_OR_USER>/baseknowledge-{api,bot,miniapp}:latest` и `:{sha-short}`.
 4. Job `deploy` (только для `main`):
    - Подключается по SSH к серверу и запускает `/root/BaseKnowledge/deploy.sh`.
-   - Скрипт обновляет git-репозиторий, логинится в GHCR, делает `docker compose pull` и `up -d`.
+   - Скрипт обновляет git-репо, логинится в GHCR, делает `docker compose pull` и `up -d`.
 
 ## Telegram и Webhook
 - `TELEGRAM_BOT_TOKEN` обязателен для бота и API-обработчика `/telegram/webhook/{secret}`.
