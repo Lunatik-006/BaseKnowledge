@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import asyncio
 from pathlib import Path
 from typing import Any, Dict, Optional, AsyncIterator, List
 
@@ -304,6 +305,13 @@ if __name__ == "__main__":
     import uvicorn
 
     settings = get_settings()
+    # Ensure DB schema is ready before starting the server
+    try:
+        asyncio.run(init_db())
+    except Exception:
+        # Let uvicorn show the startup error details; avoid swallowing exceptions
+        raise
+
     uvicorn.run(
         "apps.api.main:app",
         host="0.0.0.0",

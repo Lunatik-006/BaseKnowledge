@@ -10,6 +10,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       milvus:
         condition: service_healthy
     ports:
@@ -59,6 +61,18 @@ services:
     environment:
       <<: *log-env
     restart: unless-stopped
+  db-init:
+    # Run one-off DB initialization/migration before starting API
+    image: ghcr.io/${GHCR_NAMESPACE}/baseknowledge-api:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["python", "-c", "import asyncio; from libs.db.database import init_db; asyncio.run(init_db())"]
+    networks:
+      - api
+    restart: "no"
   postgres:
     image: postgres:15
     restart: unless-stopped
