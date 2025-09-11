@@ -127,11 +127,6 @@ services:
     environment:
       <<: *log-env
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
 
   letsencrypt:
     image: certbot/certbot
@@ -140,8 +135,7 @@ services:
       - certbot-var:/var/lib/letsencrypt
       - certbot-web:/var/www/certbot
     depends_on:
-      nginx:
-        condition: service_healthy
+      - nginx
     command: certonly --webroot --webroot-path=/var/www/certbot --email moon.nut@yandex.ru --agree-tos --no-eff-email -d mindweaver.online
     networks:
       - api
