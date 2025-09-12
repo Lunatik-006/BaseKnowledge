@@ -16,7 +16,7 @@ dist/
 build/
 
 # Environment variables
-
+.env
 .env.test
 .env.production
 baseenv
