@@ -69,6 +69,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-baseknowledge}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
     ports:
       - "5432:5432"
     networks:

@@ -199,6 +199,37 @@ API на старте выполнит проверку и создаст нед
 
 После этого `docker compose logs` покажет единообразные сообщения.
 
+### Ручной запуск Postgres «с нуля» (чтобы сработал init-скрипт)
+
+В репозитории добавлен init-скрипт (`infra/docker/postgres/initdb/01-create-db.sh`),
+который при первом старте пустого тома создаёт базу c именем из `POSTGRES_DB`.
+Скрипты в `/docker-entrypoint-initdb.d` выполняются только при ИНИЦИАЛИЗАЦИИ
+данных (когда каталог данных пуст). Если у вас ранее создавался том и база не
+создалась автоматически, запустите Postgres «с нуля»:
+
+```bash
+# Остановить сервисы и удалить тома (включая postgres_data)
+docker compose down -v
+
+# Поднять только Postgres и дождаться его готовности
+docker compose up -d postgres
+docker compose ps
+
+# (необязательно) проверить, что база создана init-скриптом
+docker compose exec -T postgres bash -lc \
+  'psql -U "${POSTGRES_USER:-postgres}" -tAc 
+   "SELECT 1 FROM pg_database WHERE datname = ''${POSTGRES_DB:-baseknowledge}''"'
+
+# Запустить остальные сервисы
+docker compose up -d
+```
+
+Примечания:
+- Имя базы берётся из `.env` (`POSTGRES_DB`).
+- В API строка подключения теперь формируется из `.env` (см. .env.example),
+  поэтому имя БД единообразно во всех сервисах. Можно задать и целиком
+  `POSTGRES_URI` — он перекроет сборку URI из компонент.
+
 ### Настройка Telegram webhook
 
 ```bash
