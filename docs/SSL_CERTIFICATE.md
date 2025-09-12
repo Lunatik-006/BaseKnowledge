@@ -12,19 +12,31 @@
 
 ## Получение сертификата
 
-1. Запустите необходимые сервисы, включая `nginx`, чтобы обеспечить доступ к challenge:
-   ```bash
-   docker compose up -d nginx api miniapp
-   ```
-2. Выпустите сертификат при помощи контейнера `letsencrypt`:
-   ```bash
-   docker compose run --rm letsencrypt
-   ```
-   Сервис `letsencrypt` использует `certbot` с методом `webroot` и доменом `mindweaver.online`, заданным в `docker-compose.yml`.
-3. Перезапустите `nginx`, чтобы он начал использовать полученные файлы сертификата:
-   ```bash
-   docker compose restart nginx
-   ```
+Сценарии отличаются в зависимости от того, есть ли уже файлы сертификата в volume `certbot-etc`.
+
+### A) Первый выпуск или после `docker compose down -v` (сертификатов нет)
+
+При отсутствии сертификата HTTPS-конфиг Nginx не стартует. Используйте временный http-only конфиг и оверрайд compose:
+
+```bash
+# 1) Запустить nginx в http-only режиме (только порт 80)
+docker compose -f docker-compose.yml -f infra/docker/nginx/http-only.override.yml up -d nginx
+
+# 2) Выпустить сертификат (webroot-челлендж через общий volume certbot-web)
+docker compose run --rm letsencrypt
+
+# 3) Перезапустить nginx с обычным https-конфигом
+docker compose up -d nginx
+```
+
+### B) Пере-выпуск/обновление (сертификаты существуют)
+
+Когда volume `certbot-etc` сохранён, nginx стартует в https сразу. Для обновления:
+
+```bash
+docker compose run --rm letsencrypt renew
+docker compose restart nginx
+```
 
 ## Обновление сертификата
 
