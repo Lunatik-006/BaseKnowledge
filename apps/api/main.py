@@ -52,20 +52,6 @@ def get_index() -> VectorIndex:
         ) from exc
 
 
-def get_llm_client(user: models.User = Depends(current_user)) -> ReplicateLLMClient:
-    lang = getattr(user, 'language', 'en') or 'en'
-    base = Path('/app/config')
-    candidates = [base / f'prompts.{lang}.yaml', base / 'prompts.yaml', base / 'prompts.en.yaml']
-    for path in candidates:
-        if path.exists():
-            return ReplicateLLMClient(prompts_path=path)
-    return ReplicateLLMClient()
-
-
-def get_embeddings_provider() -> EmbeddingsProvider:
-    return EmbeddingsProvider()
-
-
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with get_session() as session:
         yield session
@@ -113,6 +99,28 @@ async def current_user(
     if not user:
         user = await repo.create(telegram_id)
     return user
+
+
+def get_llm_client(user: models.User = Depends(current_user)) -> ReplicateLLMClient:
+    """Return LLM client selecting prompts by user language.
+
+    Defined after current_user to avoid NameError during module import.
+    """
+    lang = getattr(user, "language", "en") or "en"
+    base = Path("/app/config")
+    candidates = [
+        base / f"prompts.{lang}.yaml",
+        base / "prompts.yaml",
+        base / "prompts.en.yaml",
+    ]
+    for path in candidates:
+        if path.exists():
+            return ReplicateLLMClient(prompts_path=path)
+    return ReplicateLLMClient()
+
+
+def get_embeddings_provider() -> EmbeddingsProvider:
+    return EmbeddingsProvider()
 
 
 # ---------------------------------------------------------------------------
