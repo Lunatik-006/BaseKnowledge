@@ -55,7 +55,6 @@
       "description": "List of images to send to the model"
     },
 
-    /* ⬇⬇⬇ UPDATED: use response_format (Structured Outputs) instead of top-level json_schema ⬇⬇⬇ */
     "response_format": {
       "type": "object",
       "title": "Response Format",
@@ -96,7 +95,7 @@
       },
       "required": ["type", "json_schema"]
     },
-    /* ⬆⬆⬆ END of update ⬆⬆⬆ */
+
 
     "instructions": {
       "type": "string",
