@@ -34,7 +34,19 @@ from libs.logging import setup_logging
 # ---------------------------------------------------------------------------
 # Localisation helpers
 def L(lang: str, key: str) -> str:
-    return I18n(lang).t(key)
+    """Translate a key using YAML i18n with a built-in fallback.
+
+    If YAML files are missing in the runtime image, fall back to
+    the bundled MESSAGES dictionary to avoid leaking raw keys.
+    """
+    val = I18n(lang).t(key)
+    if val != key:
+        return val
+    # YAML missing or key absent — use in-file fallback if available
+    msg = MESSAGES.get(key)
+    if msg:
+        return msg.get(lang) or msg.get("en") or next(iter(msg.values()), key)
+    return key
 MESSAGES = {
     "start": {
         "en": (
@@ -150,9 +162,14 @@ async def _set_lang_via_api(telegram_id: int, lang: str) -> None:
 
 async def lang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     lang = _get_lang(update, context)
-    i = I18n(lang)
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(i.t('lang_en'), callback_data='setlang:en'), InlineKeyboardButton(i.t('lang_ru'), callback_data='setlang:ru')]])
-    await update.message.reply_text(f"{i.t('choose_language_title')}\n{i.t('choose_language_note')}", reply_markup=keyboard)
+    # RU+EN combined prompt
+    i_en, i_ru = I18n('en'), I18n('ru')
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(i_en.t('lang_en'), callback_data='setlang:en'), InlineKeyboardButton(i_ru.t('lang_ru'), callback_data='setlang:ru')]])
+    prompt = (
+        f"{i_en.t('choose_language_title')} / {i_ru.t('choose_language_title')}\n"
+        f"{i_en.t('choose_language_note')}\n{i_ru.t('choose_language_note')}"
+    )
+    await update.message.reply_text(prompt, reply_markup=keyboard)
 async def setlang_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
@@ -189,18 +206,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         L(lang, 'start'), reply_markup=reply_keyboard or inline_keyboard
     )
-    # Offer language selection right after /start
-    i = I18n(lang)
+    # Offer language selection right after /start (RU+EN combined)
+    i_en, i_ru = I18n('en'), I18n('ru')
     lang_keyboard = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(i.t('lang_en'), callback_data='setlang:en'),
-                InlineKeyboardButton(i.t('lang_ru'), callback_data='setlang:ru'),
+                InlineKeyboardButton(i_en.t('lang_en'), callback_data='setlang:en'),
+                InlineKeyboardButton(i_ru.t('lang_ru'), callback_data='setlang:ru'),
             ]
         ]
     )
     await update.message.reply_text(
-        f"{i.t('choose_language_title')}\n{i.t('choose_language_note')}",
+        f"{i_en.t('choose_language_title')} / {i_ru.t('choose_language_title')}\n"
+        f"{i_en.t('choose_language_note')}\n{i_ru.t('choose_language_note')}",
         reply_markup=lang_keyboard,
     )
     # If both are available, add an extra message with inline button for convenience

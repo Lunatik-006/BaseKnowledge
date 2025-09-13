@@ -74,6 +74,27 @@ async def init_db() -> None:
         # Optional: create recommended indexes in Postgres
         try:
             if sync_conn.dialect.name == "postgresql":
+                # Ensure users.telegram_id is BIGINT (Telegram IDs exceed INT range)
+                try:
+                    res = sync_conn.execute(
+                        text(
+                            """
+                            SELECT data_type
+                            FROM information_schema.columns
+                            WHERE table_name = 'users' AND column_name = 'telegram_id'
+                            """
+                        )
+                    )
+                    current_type = res.scalar()
+                    if current_type == "integer":
+                        sync_conn.execute(
+                            text(
+                                "ALTER TABLE users ALTER COLUMN telegram_id TYPE BIGINT USING telegram_id::bigint"
+                            )
+                        )
+                except Exception:
+                    # Best-effort adjustment; ignore if not applicable
+                    pass
                 sync_conn.execute(
                     text(
                         "CREATE INDEX IF NOT EXISTS ix_chunks_note_pos ON chunks (note_id, pos)"
