@@ -2,6 +2,7 @@
 
 import en from '@/locales/en.json';
 import ru from '@/locales/ru.json';
+import { getWebApp } from '@/lib/telegram';
 
 function normalize(lang?: string | null): Lang {
   const l = (lang || '').toLowerCase();
@@ -15,7 +16,7 @@ export function getLang(): Lang {
   if (lp) return normalize(lp);
   const ls = window.localStorage?.getItem('lang');
   if (ls) return normalize(ls);
-  const tg = (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.language_code as string | undefined;
+  const tg = getWebApp()?.initDataUnsafe?.user?.language_code;
   if (tg) return normalize(tg);
   return 'en';
 }
