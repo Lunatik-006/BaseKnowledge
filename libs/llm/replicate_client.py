@@ -29,6 +29,16 @@ class ReplicateLLMClient(LLMClient):
         self.timeout = timeout  # reserved for future granular timeouts
         self.logger = logging.getLogger(__name__)
 
+        # LLM diagnostics and limits (configurable via Settings / env)
+        # Fall back to sensible defaults if custom Settings class is used in tests
+        self._log_payloads: bool = bool(getattr(self.settings, "llm_log_payloads", False))
+        self._max_output_tokens: int = int(
+            getattr(self.settings, "llm_max_output_tokens", 2048)
+        )
+        self._max_completion_tokens: int = int(
+            getattr(self.settings, "llm_max_completion_tokens", 1024)
+        )
+
         self.prompts_path = (
             Path(prompts_path)
             if prompts_path is not None
@@ -143,11 +153,14 @@ class ReplicateLLMClient(LLMClient):
                     [m.get("content", "") for m in messages if isinstance(m, dict)]
                 )
 
-            # Tokens knob depends on model family
+            # Tokens knob depends on model family. Use higher defaults to
+            # avoid empty outputs as recommended by Replicate docs.
             if model.endswith("gpt-5-structured"):
-                input_payload["max_output_tokens"] = 900
+                tokens_key = "max_output_tokens"
+                input_payload[tokens_key] = self._max_output_tokens
             else:
-                input_payload["max_completion_tokens"] = 900
+                tokens_key = "max_completion_tokens"
+                input_payload[tokens_key] = self._max_completion_tokens
 
             # Merge any extras (e.g., json_schema) as recommended by guide
             if extra_input:
@@ -158,30 +171,90 @@ class ReplicateLLMClient(LLMClient):
                 payload_json = json.dumps(input_payload, ensure_ascii=False, default=str)
             except Exception:
                 payload_json = repr(input_payload)
-            self.logger.debug("Replicate request | model=%s | input=%s", model, payload_json)
+            _lvl = logging.INFO if self._log_payloads else logging.DEBUG
+            self.logger.log(_lvl, "Replicate request | model=%s | input=%s", model, payload_json)
 
             out = replicate.run(model, input=input_payload)
 
             # Capture raw response before joining for logging purposes
-            raw_chunks: List[str]
+            # Normalize output into text while keeping a raw view for logging.
+            raw_view: Any = out
+            text: str
             if out is None:
-                raw_chunks = []
+                text = ""
             elif isinstance(out, str):
-                raw_chunks = [out]
-            else:
+                text = out
+            elif isinstance(out, dict):
+                # Some models may return a JSON object directly
                 try:
-                    raw_chunks = list(out)  # type: ignore[arg-type]
+                    text = json.dumps(out, ensure_ascii=False)
+                except Exception:
+                    text = str(out)
+            else:
+                # Many models stream an iterator of string chunks
+                try:
+                    chunks = list(out)  # type: ignore[arg-type]
                 except Exception as exc:  # pragma: no cover - defensive
                     raise LLMClientError("Unexpected streaming output from Replicate") from exc
+                try:
+                    text = "".join(chunks)
+                except Exception:
+                    text = "".join(str(c) for c in chunks)
 
             # Log raw response (as-is chunks) for debugging
             try:
-                raw_json = json.dumps(raw_chunks, ensure_ascii=False, default=str)
+                raw_json = json.dumps(raw_view, ensure_ascii=False, default=str)
             except Exception:
-                raw_json = repr(raw_chunks)
-            self.logger.debug("Replicate raw response | model=%s | raw=%s", model, raw_json)
+                raw_json = repr(raw_view)
+            self.logger.log(_lvl, "Replicate raw response | model=%s | raw=%s", model, raw_json)
 
-            text = "".join(raw_chunks)
+            if not text.strip() and tokens_key == "max_output_tokens":
+                # Proactive single retry with higher cap for structured outputs
+                try:
+                    prev = int(input_payload.get(tokens_key, 0))
+                except Exception:
+                    prev = self._max_output_tokens
+                new_cap = min(max(prev * 2, 2048), 4096)
+                if new_cap > prev:
+                    self.logger.info(
+                        "Replicate empty output; retry with %s=%s (prev=%s)",
+                        tokens_key,
+                        new_cap,
+                        prev,
+                    )
+                    input_payload[tokens_key] = new_cap
+                    _retry_out = replicate.run(model, input=input_payload)
+                    raw_view = _retry_out
+                    if _retry_out is None:
+                        text = ""
+                    elif isinstance(_retry_out, str):
+                        text = _retry_out
+                    elif isinstance(_retry_out, dict):
+                        try:
+                            text = json.dumps(_retry_out, ensure_ascii=False)
+                        except Exception:
+                            text = str(_retry_out)
+                    else:
+                        try:
+                            _retry_chunks = list(_retry_out)  # type: ignore[arg-type]
+                        except Exception as exc:  # pragma: no cover
+                            raise LLMClientError("Unexpected streaming output from Replicate") from exc
+                        try:
+                            text = "".join(_retry_chunks)
+                        except Exception:
+                            text = "".join(str(c) for c in _retry_chunks)
+
+                    try:
+                        raw_json_retry = json.dumps(raw_view, ensure_ascii=False, default=str)
+                    except Exception:
+                        raw_json_retry = repr(raw_view)
+                    self.logger.log(
+                        _lvl,
+                        "Replicate raw response (retry) | model=%s | raw=%s",
+                        model,
+                        raw_json_retry,
+                    )
+
             return text
         except Exception as exc:
             # Ensure failure is visible in logs with stack trace

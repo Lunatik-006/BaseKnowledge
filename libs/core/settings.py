@@ -42,6 +42,19 @@ class Settings(BaseSettings):
     postgres_uri: str = Field(default_factory=_default_postgres_uri_from_env)
     vault_dir: Path = Field(default=Path("/tmp/vault"))
     log_level: str = Field(default="INFO")
+    # LLM diagnostics & limits
+    llm_log_payloads: bool = Field(
+        default=False,
+        description="Log raw Replicate request/response payloads at INFO level",
+    )
+    llm_max_output_tokens: int = Field(
+        default=2048,
+        description="Max output tokens for structured models (gpt-5-structured)",
+    )
+    llm_max_completion_tokens: int = Field(
+        default=1024,
+        description="Max completion tokens for nano models (gpt-5-nano)",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
