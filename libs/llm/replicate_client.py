@@ -124,10 +124,12 @@ class ReplicateLLMClient(LLMClient):
                 ) from exc
 
     def _call(self, model: str, messages: List[Dict[str, str]]) -> str:
-        """Call Replicate model using the official client per guide.
+        """Call Replicate model using the official client per guide and schemas.
 
-        - For gpt-5-structured, tokens param is `max_output_tokens`.
-        - For gpt-5-nano, tokens param is `max_completion_tokens`.
+        - For `openai/gpt-5-structured`, follow docs/gpt-5-structured-input-schema.json:
+          use `instructions` (system) + `prompt` (user), and `max_output_tokens`.
+        - For `openai/gpt-5-nano`, follow docs/gpt-5-nano-input-schema.json:
+          use chat `messages` (or `prompt`) and `max_completion_tokens`.
         """
         try:
             input_payload: Dict[str, Any] = {
@@ -135,7 +137,7 @@ class ReplicateLLMClient(LLMClient):
                 "verbosity": "low",
             }
 
-            # Merge messages or prompt + any extra input passed via a sentinel element
+            # Merge any extra input passed via a sentinel element at the tail
             extra_input: Dict[str, Any] = {}
             if messages and isinstance(messages[-1], dict) and "_extra_input" in messages[-1]:
                 sentinel = messages.pop()  # type: ignore[assignment]
@@ -144,21 +146,53 @@ class ReplicateLLMClient(LLMClient):
                 except Exception:
                     extra_input = {}
 
-            # Support passing either chat messages or a single prompt string
-            if isinstance(messages, list) and messages and isinstance(messages[0], dict) and "role" in messages[0]:
-                input_payload["messages"] = messages
-            else:  # Fallback to prompt concatenation if something else was provided
-                # Keep a conservative fallback; callers should pass proper messages normally
-                input_payload["prompt"] = "\n\n".join(
-                    [m.get("content", "") for m in messages if isinstance(m, dict)]
-                )
+            # Structured vs Nano mapping strictly per schemas in docs
+            is_structured = model.endswith("gpt-5-structured")
 
-            # Tokens knob depends on model family. Use higher defaults to
-            # avoid empty outputs as recommended by Replicate docs.
-            if model.endswith("gpt-5-structured"):
+            if is_structured:
+                # docs/gpt-5-structured-input-schema.json
+                # Map chat-style messages into schema-compliant fields
+                system_parts = [
+                    (m.get("content") or "")
+                    for m in messages
+                    if isinstance(m, dict) and m.get("role") == "system"
+                ]
+                user_parts = [
+                    (m.get("content") or "")
+                    for m in messages
+                    if isinstance(m, dict) and m.get("role") == "user"
+                ]
+
+                instructions = "\n\n".join([p for p in system_parts if p])
+                prompt_text = "\n\n".join([p for p in user_parts if p])
+
+                if instructions:
+                    input_payload["instructions"] = instructions
+                if prompt_text:
+                    input_payload["prompt"] = prompt_text
+
+                # Be explicit about model family selection for structured
+                input_payload.setdefault("model", "gpt-5")
+
+                # Tokens control per schema
                 tokens_key = "max_output_tokens"
                 input_payload[tokens_key] = self._max_output_tokens
             else:
+                # docs/gpt-5-nano-input-schema.json
+                # Prefer passing chat messages, fallback to concatenated prompt
+                has_roles = bool(
+                    isinstance(messages, list)
+                    and messages
+                    and isinstance(messages[0], dict)
+                    and "role" in messages[0]
+                )
+                if has_roles:
+                    input_payload["messages"] = messages
+                else:
+                    input_payload["prompt"] = "\n\n".join(
+                        [m.get("content", "") for m in messages if isinstance(m, dict)]
+                    )
+
                 tokens_key = "max_completion_tokens"
                 input_payload[tokens_key] = self._max_completion_tokens
 

@@ -189,6 +189,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         L(lang, 'start'), reply_markup=reply_keyboard or inline_keyboard
     )
+    # Offer language selection right after /start
+    i = I18n(lang)
+    lang_keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(i.t('lang_en'), callback_data='setlang:en'),
+                InlineKeyboardButton(i.t('lang_ru'), callback_data='setlang:ru'),
+            ]
+        ]
+    )
+    await update.message.reply_text(
+        f"{i.t('choose_language_title')}\n{i.t('choose_language_note')}",
+        reply_markup=lang_keyboard,
+    )
     # If both are available, add an extra message with inline button for convenience
     if reply_keyboard and inline_keyboard:
         await update.message.reply_text(L(lang, 'open_app'), reply_markup=inline_keyboard)

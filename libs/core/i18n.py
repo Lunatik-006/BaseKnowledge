@@ -7,11 +7,21 @@ import yaml
 
 
 class I18n:
-    """Simple YAML-backed i18n loader with fallback to English."""
+    """Simple YAML-backed i18n loader with fallback to English.
+
+    Uses a path relative to this file by default, so it does not depend
+    on the current working directory of the running process.
+    """
 
     def __init__(self, lang: str, base_dir: Path | None = None) -> None:
         self.lang = (lang or 'en').lower()
-        self.base_dir = base_dir or Path('config/i18n')
+        # Default to repo-relative `config/i18n` regardless of CWD
+        if base_dir is None:
+            # libs/core/i18n.py -> project_root/config/i18n
+            project_root = Path(__file__).resolve().parents[2]
+            self.base_dir = project_root / 'config' / 'i18n'
+        else:
+            self.base_dir = base_dir
         self._cache: Dict[str, str] = {}
         self._fallback: Dict[str, str] = {}
         self._load()
