@@ -1,0 +1,38 @@
+﻿start: |
+  Welcome! I turn your messages and forwarded posts into tidy notes.
+
+  How to use:
+  • Send or forward any text to create notes.
+  • Use /mode to switch One‑to‑One (instant) vs Curate (buffer 60s).
+  • Open the Mini App to browse, search, and export ZIP.
+  • Tap the menu button to see all bot commands.
+
+  Important: Your language selection also affects how the bot processes your materials.
+help: |
+  Commands:
+  /start — welcome and usage
+  /mode — toggle One‑to‑One/Curate (buffers 60s)
+  /help — this help
+  /lang — choose interaction language
+
+  Tip: In Curate mode messages are deduplicated and processed together.
+open_app: Open Mini App
+mode_one: Mode: One-to-One
+mode_curate: Mode: Curate. Messages are buffered for 60s.
+buffered: Saved. Send more or press 'Process now'.
+process_now: Process now
+processing: Processing…
+done: Notes created:
+zip: Download ZIP
+error: Error: {error}
+service_unavailable: Service temporarily unavailable
+request_rejected: Request rejected
+dev_info: info for developers: {info}
+no_text: Text is empty
+no_notes: No notes created
+choose_language_title: Choose your language
+choose_language_note: This will also affect how your materials are processed.
+lang_en: English
+lang_ru: Русский
+lang_set_en: Language set to English.
+lang_set_ru: Язык переключён на русский.

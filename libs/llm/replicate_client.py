@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import logging
 from typing import Any, Dict, Iterable, List, Union
 
 import replicate
@@ -26,6 +27,7 @@ class ReplicateLLMClient(LLMClient):
     ) -> None:
         self.settings = settings or get_settings()
         self.timeout = timeout  # reserved for future granular timeouts
+        self.logger = logging.getLogger(__name__)
 
         self.prompts_path = (
             Path(prompts_path)
@@ -35,6 +37,8 @@ class ReplicateLLMClient(LLMClient):
         try:
             with self.prompts_path.open("r", encoding="utf-8") as fh:
                 self.prompts: Dict[str, Dict[str, str]] = yaml.safe_load(fh) or {}
+            # Log which prompts file is loaded for transparency
+            self.logger.debug("Prompts loaded from: %s", str(self.prompts_path))
         except FileNotFoundError as exc:
             raise LLMClientError(
                 f"Prompts file not found: {self.prompts_path}"
@@ -149,12 +153,39 @@ class ReplicateLLMClient(LLMClient):
             if extra_input:
                 input_payload.update(extra_input)
 
+            # Log full request payload for debugging (standard format)
+            try:
+                payload_json = json.dumps(input_payload, ensure_ascii=False, default=str)
+            except Exception:
+                payload_json = repr(input_payload)
+            self.logger.debug("Replicate request | model=%s | input=%s", model, payload_json)
+
             out = replicate.run(model, input=input_payload)
-            text = self._join_output(out)
-            if not isinstance(text, str):  # pragma: no cover - safety
-                raise LLMClientError("Unexpected response type from Replicate")
+
+            # Capture raw response before joining for logging purposes
+            raw_chunks: List[str]
+            if out is None:
+                raw_chunks = []
+            elif isinstance(out, str):
+                raw_chunks = [out]
+            else:
+                try:
+                    raw_chunks = list(out)  # type: ignore[arg-type]
+                except Exception as exc:  # pragma: no cover - defensive
+                    raise LLMClientError("Unexpected streaming output from Replicate") from exc
+
+            # Log raw response (as-is chunks) for debugging
+            try:
+                raw_json = json.dumps(raw_chunks, ensure_ascii=False, default=str)
+            except Exception:
+                raw_json = repr(raw_chunks)
+            self.logger.debug("Replicate raw response | model=%s | raw=%s", model, raw_json)
+
+            text = "".join(raw_chunks)
             return text
         except Exception as exc:
+            # Ensure failure is visible in logs with stack trace
+            self.logger.exception("Replicate request failed: %s", exc)
             raise LLMClientError(f"Replicate request failed: {exc}") from exc
 
     def generate_structured_notes(self, text: str) -> List[Dict[str, Any]]:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Dict, List
+import logging
+import json
 
 import replicate
 from libs.core.settings import get_settings
@@ -28,9 +30,24 @@ class EmbeddingsProvider:
         self.batch_size = batch_size
         self.enable_cache = enable_cache
         self._cache: Dict[str, List[float]] = {}
+        self.logger = logging.getLogger(__name__)
 
     def _embed_batch(self, texts: List[str]) -> List[List[float]]:
+        # Log full request for embeddings
+        try:
+            payload_json = json.dumps({"texts": texts}, ensure_ascii=False, default=str)
+        except Exception:
+            payload_json = repr({"texts": texts})
+        self.logger.debug("Replicate request | model=%s | input=%s", self.model, payload_json)
+
         output = replicate.run(self.model, input={"texts": texts})
+
+        # Log raw response (as-is) for embeddings
+        try:
+            raw_json = json.dumps(output, ensure_ascii=False, default=str)
+        except Exception:
+            raw_json = repr(output)
+        self.logger.debug("Replicate raw response | model=%s | raw=%s", self.model, raw_json)
         if isinstance(output, dict) and "embeddings" in output:
             embeddings = output["embeddings"]
         else:

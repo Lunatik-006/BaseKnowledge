@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for core entities."""
+﻿"""SQLAlchemy ORM models for core entities."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ class User(Base):
         String, primary_key=True, default=lambda: str(uuid4())
     )
     telegram_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    language: Mapped[str] = mapped_column(String(8), default='en')
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

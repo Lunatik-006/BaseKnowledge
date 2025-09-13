@@ -1,0 +1,16 @@
+﻿{
+  "header.search": "Поиск",
+  "header.downloadZip": "Скачать ZIP",
+  "home.title": "Добро пожаловать",
+  "home.lead": "Перешлите любое сообщение боту, чтобы создать заметки. Откройте Mini App, чтобы просматривать, искать и выгружать ZIP вашего хранилища.",
+  "home.cta.search": "Поиск",
+  "home.cta.downloadZip": "Скачать ZIP",
+  "home.recent": "Недавние заметки",
+  "home.noNotes": "Заметок пока нет — отправьте сообщение боту, чтобы создать первую.",
+  "search.title": "Поиск",
+  "search.placeholder": "Искать в заметках",
+  "search.button": "Найти",
+  "search.results": "Результаты",
+  "note.downloadZip": "Скачать ZIP",
+  "note.openInObsidian": "Открыть в Obsidian"
+}

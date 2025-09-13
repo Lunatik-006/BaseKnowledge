@@ -2,4 +2,5 @@ services:
   nginx:
     volumes:
       - ./infra/docker/nginx/default-http.conf:/etc/nginx/conf.d/default.conf:ro
-
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-web:/var/www/certbot:ro

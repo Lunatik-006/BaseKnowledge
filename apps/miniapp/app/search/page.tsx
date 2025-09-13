@@ -1,7 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { t } from '@/lib/i18n';
 import ReactMarkdown from 'react-markdown';
 import { searchNotes } from '@/lib/api';
 
@@ -18,20 +19,21 @@ export default function SearchPage() {
   };
 
   return (
-    <main>
-      <h1>Search</h1>
-      <form onSubmit={handleSearch}>
+    <main style={{ padding: '16px' }}>
+      <h1 style={{ marginBottom: 8 }}>{t('search.title')}</h1>
+      <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search notes"
+          placeholder={t('search.placeholder')}
+          style={{ flex: 1 }}
         />
-        <button type="submit">Search</button>
+        <button type="submit">{t('search.button')}</button>
       </form>
       {answer && <ReactMarkdown>{answer}</ReactMarkdown>}
       {items.length > 0 && (
         <div>
-          <h2>См. также</h2>
+          <h2 style={{ margin: '12px 0' }}>{t('search.results')}</h2>
           <ul>
             {items.map((note) => (
               <li key={note.id}>

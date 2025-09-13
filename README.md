@@ -330,3 +330,24 @@ graph TD
 - Техническая спецификация: `docs/Technical Specification.md`
 - Деплой: `docs/DEPLOYMENT.md`
 - TLS/сертификат: `docs/SSL_CERTIFICATE.md`
+
+## Dependencies by service
+
+- API (Python): `fastapi`, `uvicorn[standard]`, `python-telegram-bot`, `replicate`, `sqlalchemy`, `pydantic`, `pydantic-settings`, `psycopg[binary]`, `pymilvus`, `PyYAML`
+- Bot (Python): `python-telegram-bot`, `httpx`, `pydantic`, `pydantic-settings`, `PyYAML`
+
+## Localization and user language
+
+- DB: `users.language VARCHAR(8) DEFAULT 'en'`
+- Affects: bot messages, Mini App UI (`?lang=xx`), and LLM prompts (`/app/config/prompts.<lang>.yaml`).
+
+### Language endpoints
+
+- `GET /api/user/settings` > `{ "lang": "en|ru" }`
+- `POST /api/user/lang` (Telegram initData) > updates current user language
+- `POST /api/bot/user/lang` (header `X-Bot-Api-Token`) > set language from bot
+
+### DB init
+
+- `infra/scripts/init.sql` includes `users.language`
+- Additionally, `init_db()` will add missing columns/indexes automatically on startup

@@ -22,8 +22,14 @@
 # 1) Запустить nginx в http-only режиме (только порт 80)
 docker compose -f docker-compose.yml -f infra/docker/nginx/http-only.override.yml up -d nginx
 
+# 1.1) Убедиться, что порт 80 доступен извне (важно для Let's Encrypt)
+# На сервере:
+curl -I http://localhost/.well-known/acme-challenge/ping || true
+# С другой машины/сети (или через онлайн-проверку):
+# curl -I http://mindweaver.online/.well-known/acme-challenge/ping
+
 # 2) Выпустить сертификат (webroot-челлендж через общий volume certbot-web)
-docker compose run --rm letsencrypt
+docker compose -f docker-compose.yml -f infra/docker/nginx/http-only.override.yml run --rm letsencrypt
 
 # 3) Перезапустить nginx с обычным https-конфигом
 docker compose up -d nginx

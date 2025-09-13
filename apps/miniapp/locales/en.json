@@ -1,0 +1,16 @@
+﻿{
+  "header.search": "Search",
+  "header.downloadZip": "Download ZIP",
+  "home.title": "Welcome",
+  "home.lead": "Forward any message to the bot to create notes. Open the Mini App to browse, search, and export a ZIP of your vault.",
+  "home.cta.search": "Search",
+  "home.cta.downloadZip": "Download ZIP",
+  "home.recent": "Recent notes",
+  "home.noNotes": "No notes yet — send a message to the bot to create your first note.",
+  "search.title": "Search",
+  "search.placeholder": "Search notes",
+  "search.button": "Search",
+  "search.results": "Results",
+  "note.downloadZip": "Download ZIP",
+  "note.openInObsidian": "Open in Obsidian"
+}

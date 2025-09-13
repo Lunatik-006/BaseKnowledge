@@ -52,7 +52,13 @@ def get_index() -> VectorIndex:
         ) from exc
 
 
-def get_llm_client() -> ReplicateLLMClient:
+def get_llm_client(user: models.User = Depends(current_user)) -> ReplicateLLMClient:
+    lang = getattr(user, 'language', 'en') or 'en'
+    base = Path('/app/config')
+    candidates = [base / f'prompts.{lang}.yaml', base / 'prompts.yaml', base / 'prompts.en.yaml']
+    for path in candidates:
+        if path.exists():
+            return ReplicateLLMClient(prompts_path=path)
     return ReplicateLLMClient()
 
 
@@ -126,6 +132,15 @@ class SearchRequest(BaseModel):
     k: int = Field(5, ge=1, le=50)
 
 
+class UpdateLanguageRequest(BaseModel):
+    lang: str = Field(pattern="^(en|ru)$")
+
+
+class BotUpdateLangRequest(BaseModel):
+    telegram_id: int
+    lang: str = Field(pattern="^(en|ru)$")
+
+
 # ---------------------------------------------------------------------------
 # FastAPI application
 
@@ -141,6 +156,40 @@ async def startup() -> None:
 def health() -> Dict[str, str]:
     """Health check endpoint used by docker-compose."""
     return {"status": "ok"}
+
+
+@app.get("/user/settings")
+async def user_settings(user: models.User = Depends(current_user)) -> Dict[str, Any]:
+    return {"lang": getattr(user, "language", "en") or "en"}
+
+
+@app.post("/user/lang")
+async def update_user_lang(
+    req: UpdateLanguageRequest,
+    user: models.User = Depends(current_user),
+    session: AsyncSession = Depends(db_session),
+) -> Dict[str, Any]:
+    repo = UserRepo(session)
+    await repo.set_language(user, req.lang)
+    return {"status": "ok", "lang": req.lang}
+
+
+@app.post("/bot/user/lang")
+async def bot_update_user_lang(
+    req: BotUpdateLangRequest,
+    bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
+    session: AsyncSession = Depends(db_session),
+) -> Dict[str, Any]:
+    settings = get_settings()
+    if not bot_api_token or bot_api_token != settings.bot_api_token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    repo = UserRepo(session)
+    user = await repo.get_by_telegram(req.telegram_id)
+    if not user:
+        user = await repo.create(req.telegram_id, language=req.lang)
+    else:
+        await repo.set_language(user, req.lang)
+    return {"status": "ok", "lang": req.lang}
 
 
 # Factory dependencies for use cases -------------------------------------------------

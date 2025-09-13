@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { getNote, getZipUrl, getObsidianUrl } from "@/lib/api";
+import { t } from "@/lib/i18n";
 
 export default function NotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id: slug } = use(params);
@@ -26,10 +27,10 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
       <ReactMarkdown>{note.content}</ReactMarkdown>
       <div style={{ marginTop: "1rem" }}>
         <a href={getZipUrl()}>
-          <button>Download ZIP</button>
+          <button>{t('note.downloadZip')}</button>
         </a>
         <a href={getObsidianUrl(slug)} style={{ marginLeft: "0.5rem" }}>
-          <button>Open in Obsidian</button>
+          <button>{t('note.openInObsidian')}</button>
         </a>
       </div>
     </main>

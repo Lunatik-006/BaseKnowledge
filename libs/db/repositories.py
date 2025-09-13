@@ -1,4 +1,4 @@
-"""Repository classes for CRUD operations on ORM models."""
+﻿"""Repository classes for CRUD operations on ORM models."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ class UserRepo:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, telegram_id: int) -> models.User:
-        user = models.User(telegram_id=telegram_id)
+    async def create(self, telegram_id: int, language: str | None = None) -> models.User:
+        user = models.User(telegram_id=telegram_id, language=language or 'en')
         self.session.add(user)
         await self.session.flush()
         return user
@@ -36,6 +36,11 @@ class UserRepo:
 
     async def delete(self, user: models.User) -> None:
         await self.session.delete(user)
+
+    async def set_language(self, user: models.User, lang: str) -> models.User:
+        user.language = lang
+        await self.session.flush()
+        return user
 
 
 class NoteRepo:
@@ -114,3 +119,4 @@ class ChunkRepo:
 
 
 __all__ = ["UserRepo", "NoteRepo", "ChunkRepo"]
+
