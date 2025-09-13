@@ -3,7 +3,7 @@
 
 # Tests
 tests/
-
+replicate_test.py
 # Node modules for miniapp
 apps/miniapp/node_modules
 

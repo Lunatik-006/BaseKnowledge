@@ -14,6 +14,7 @@ coverage/
 *.lcov
 dist/
 build/
+replicate_test.py
 
 # Environment variables
 .env
