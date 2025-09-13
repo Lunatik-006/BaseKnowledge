@@ -1,6 +1,7 @@
 # Using `openai/gpt-5-nano` and `openai/gpt-5-structured` on Replicate via Python
 
 This guide is a hands‑on tutorial with code examples for building a **code assistant** based on GPT‑5 models from Replicate, with a focus on:
+
 - **`openai/gpt-5-nano`** — the fastest and most cost‑efficient model, ideal for quick tasks and tight loops.
 - **`openai/gpt-5-structured`** — supports _structured output_, _web search_, and _tool hooks_ for reliable integrations.
 
@@ -19,6 +20,7 @@ Examples use the official **`replicate`** Python client.
 ## 2) Quick start
 
 ### 2.1 `gpt-5-nano`: single‑turn answer
+
 ```python
 import replicate
 
@@ -48,46 +50,85 @@ print(text)
 
 Use `gpt-5-structured` when you must **guarantee schema‑compliant JSON** for downstream automation.
 
-### 3.1 Minimal JSON schema extraction
+### 3.1 Minimal JSON schema extraction (via `response_format`)
+
 ```python
-import replicate, json
+import json
+import replicate
 
-MODEL = "openai/gpt-5-structured:f5f98472..."
+MODEL = "openai/gpt-5-structured"  # можно закрепить конкретную версию
 
-schema = {
-    "type": "object",
-    "properties": {
-        "summary": {"type": "string"},
-        "language": {"type": "string", "enum": ["python", "javascript", "bash"]},
-        "snippets": {
-            "type": "array",
-            "items": {"type": "string"}
-        },
-    },
-    "required": ["summary", "language", "snippets"],
-    "additionalProperties": False,
+response_format = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "code_assistant_extract",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "summary":  {"type": "string"},
+                "language": {"type": "string", "enum": ["python", "javascript", "bash"]},
+                "snippets": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["summary", "language", "snippets"],
+            "additionalProperties": False
+        }
+    }
 }
 
 prompt = "Summarize how to read a text file line-by-line and give 2–3 code snippets in Python."
 
-iterator = replicate.run(
+out = replicate.run(
     MODEL,
     input={
-        "prompt": prompt,
-        "json_schema": schema,
+        "instructions": "Return ONLY JSON that conforms to the schema.",
+        "input_item_list": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": prompt}
+                ]
+            }
+        ],
+        "response_format": response_format,
         "reasoning_effort": "minimal",
         "verbosity": "low",
-        "max_output_tokens": 700,
+        "max_output_tokens": 700
     },
 )
 
-text = "".join(list(iterator))
-data = json.loads(text)  # guaranteed to conform to json_schema on success
+# Универсальная распаковка результата в dict
+def to_obj(x):
+    if isinstance(x, dict):
+        return x
+    if isinstance(x, str):
+        try:
+            return json.loads(x)
+        except Exception:
+            return {"raw": x}
+    if hasattr(x, "read"):  # FileOutput
+        data = x.read()
+        try:
+            return json.loads(data.decode("utf-8"))
+        except Exception:
+            return {"bytes_len": len(data)}
+    if isinstance(x, list):
+        for item in x:
+            v = to_obj(item)
+            if v is not None:
+                return v
+    return {"output": x}
+
+data = to_obj(out)
 print(json.dumps(data, indent=2, ensure_ascii=False))
 ```
 
+> Примечание: **не** передавай «голую» JSON Schema полем `json_schema` на верхнем уровне `input` — это приведёт к ошибкам вида `Unknown parameter: 'text.name'`. Используй `response_format.json_schema`.
+
 ### 3.2 Simple string‑based schema (`simple_schema`)
+
 When you only need flat fields, you can define a lightweight format:
+
 ```python
 MODEL = "openai/gpt-5-structured:f5f98472..."
 
@@ -109,6 +150,8 @@ it = replicate.run(
 )
 print("".join(list(it)))
 ```
+
+> ℹ️ Если структура становится вложенной (объекты/объекты в массивах/enum и т.п.), вместо `simple_schema` переходи на полноценную JSON Schema **через** `response_format.json_schema` (см. пример в 3.1). Это избавляет от ошибок совместимости и даёт строгую валидацию.
 
 ---
 
@@ -140,26 +183,68 @@ for event in replicate.stream(
     print(str(event), end="")
 ```
 
-### gpt-5-structured
+### gpt-5-structured — structured output (OpenAI Responses API compatible)
+
+   *“`gpt-5-structured` выдаёт строго структурированный JSON через механизм **Structured Outputs** (OpenAI) — в Replicate это задаётся полем `response_format` с типом `json_schema`.”* 
 
 ```python
+import json
 import replicate
 
-input = {
-    "model": "gpt-5",
-    "prompt": "Use the web to find a news article headline from today",
-    "json_schema": {},
-    "reasoning_effort": "low",
-    "enable_web_search": True
+MODEL = "openai/gpt-5-structured"
+
+response_format = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "today_news_headline",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "headline": {"type": "string"},
+                "source":   {"type": "string"},
+                "url":      {"type": "string"}
+            },
+            "required": ["headline", "source", "url"],
+            "additionalProperties": False
+        }
+    }
 }
 
-output = replicate.run(
-    "openai/gpt-5-structured",
-    input=input
-)
+input_payload = {
+    "instructions": "Use the web if available. Return ONLY JSON.",
+    "input_item_list": [
+        {"role": "user",
+         "content": [{"type": "input_text",
+                      "text": "Find one news headline from today and return headline/source/url."}]}
+    ],
+    "response_format": response_format,
+    "reasoning_effort": "low",
+    "verbosity": "low",
+    "max_output_tokens": 600,
+    # "enable_web_search": True  # если версия/права это поддерживают
+}
 
-print(output)
-#=> {"text":"Here’s a news headline from today, August 14, 20...
+out = replicate.run(MODEL, input=input_payload)
+
+# печать как JSON-объекта
+def to_obj(x):
+    if isinstance(x, dict): return x
+    if isinstance(x, str):
+        try: return json.loads(x)
+        except Exception: return {"raw": x}
+    if hasattr(x, "read"):  # FileOutput
+        data = x.read()
+        try: return json.loads(data.decode("utf-8"))
+        except Exception: return {"bytes_len": len(data)}
+    if isinstance(x, list):
+        for item in x:
+            v = to_obj(item)
+            if v is not None:
+                return v
+    return {"output": x}
+
+print(json.dumps(to_obj(out), indent=2, ensure_ascii=False))
 ```
 
 ---
@@ -183,12 +268,14 @@ print(output)
 - Prompt config (YAML): `../config/prompts.yaml`
 
 How the code uses the prompt config:
+
 - The class `libs/llm/replicate_client.py:ReplicateLLMClient` loads `prompts.yaml` on initialization (defaults to `/app/config/prompts.yaml`; the path can be overridden).
 - Access strings via `_prompt(section, key)`, where `key` is typically `system` or `user`.
 - For each operation, build `messages` and call `replicate.run` with the required model.
 - If the file/key is missing, an `LLMClientError` is raised.
 
 Mapping “prompt = task” (YAML section → method):
+
 - `insights` → extract insights from text → `generate_structured_notes()` (`gpt-5-structured`)
 - `topics` → group insights by topics → `group_topics()` (`gpt-5-structured`)
 - `note` → generate a Markdown note from an insight → `render_note_markdown()` (`gpt-5-structured`)

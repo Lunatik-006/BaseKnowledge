@@ -54,13 +54,50 @@
       "x-order": 3,
       "description": "List of images to send to the model"
     },
-    "json_schema": {
+
+    /* ⬇⬇⬇ UPDATED: use response_format (Structured Outputs) instead of top-level json_schema ⬇⬇⬇ */
+    "response_format": {
       "type": "object",
-      "title": "Json Schema",
-      "default": {},
+      "title": "Response Format",
       "x-order": 11,
-      "description": "A JSON schema that the response must conform to. For simple data structures we recommend using `simple_text_format_schema` which will be converted to a JSON schema for you."
+      "nullable": true,
+      "description": "Structured outputs configuration (OpenAI Responses API compatible). To enforce a JSON Schema, set: { \"type\": \"json_schema\", \"json_schema\": { \"name\": \"...\", \"strict\": true, \"schema\": { ... } } }",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["json_schema"],
+          "title": "Response format type",
+          "description": "Use \"json_schema\" to enforce structured JSON outputs."
+        },
+        "json_schema": {
+          "type": "object",
+          "title": "JSON Schema container",
+          "description": "Container for the JSON Schema definition as per OpenAI Structured Outputs.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Schema name",
+              "description": "Arbitrary name for the schema."
+            },
+            "strict": {
+              "type": "boolean",
+              "title": "Strict",
+              "description": "If true, the model must return output strictly conforming to the schema.",
+              "default": true
+            },
+            "schema": {
+              "type": "object",
+              "title": "Schema",
+              "description": "A valid JSON Schema object (Draft-07/2020-12 compatible)."
+            }
+          },
+          "required": ["name", "schema"]
+        }
+      },
+      "required": ["type", "json_schema"]
     },
+    /* ⬆⬆⬆ END of update ⬆⬆⬆ */
+
     "instructions": {
       "type": "string",
       "title": "Instructions",
@@ -76,7 +113,7 @@
       "title": "Simple Schema",
       "default": [],
       "x-order": 7,
-      "description": "Create a JSON schema for the output to conform to. The schema will be created from a simple list of field specifications. Strings: 'thing' (defaults to string), 'thing:str', 'thing:string'. Booleans: 'is_a_thing:bool' or 'is_a_thing:boolean'. Numbers: 'count:number', 'count:int'. Lists: 'things:list' (defaults to list of strings), 'things:list:str', 'number_things:list:number', etc. Nested objects are not supported, use `json_schema` instead."
+      "description": "Create a JSON schema for the output to conform to. The schema will be created from a simple list of field specifications. Strings: 'thing' (defaults to string), 'thing:str', 'thing:string'. Booleans: 'is_a_thing:bool' or 'is_a_thing:boolean'. Numbers: 'count:number', 'count:int'. Lists: 'things:list' (defaults to list of strings), 'things:list:str', 'number_things:list:number', etc. Nested objects are not supported, use response_format.json_schema instead."
     },
     "input_item_list": {
       "type": "array",

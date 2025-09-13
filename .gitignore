@@ -1,6 +1,9 @@
 # Node.js dependencies
 node_modules/
 
+# Temporary files
+TEMP-FILE-*
+
 # Debug and log files
 logs
 *.log
@@ -14,7 +17,7 @@ coverage/
 *.lcov
 dist/
 build/
-replicate_test.py
+replicate_test*.py
 
 # Environment variables
 .env
