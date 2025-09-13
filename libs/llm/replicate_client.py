@@ -127,7 +127,8 @@ class ReplicateLLMClient(LLMClient):
         """Call Replicate model using the official client per guide and schemas.
 
         - For `openai/gpt-5-structured`, follow docs/gpt-5-structured-input-schema.json:
-          use `instructions` (system) + `prompt` (user), and `max_output_tokens`.
+          use `instructions` (system) + `input_item_list` (user) and `response_format`
+          for JSON schemas, along with `max_output_tokens`.
         - For `openai/gpt-5-nano`, follow docs/gpt-5-nano-input-schema.json:
           use chat `messages` (or `prompt`) and `max_completion_tokens`.
         """
@@ -151,7 +152,9 @@ class ReplicateLLMClient(LLMClient):
 
             if is_structured:
                 # docs/gpt-5-structured-input-schema.json
-                # Map chat-style messages into schema-compliant fields
+                # Map chat-style messages into schema-compliant fields:
+                # - Combine system messages into `instructions`
+                # - Convert user messages into `input_item_list` with input_text content
                 system_parts = [
                     (m.get("content") or "")
                     for m in messages
@@ -164,12 +167,24 @@ class ReplicateLLMClient(LLMClient):
                 ]
 
                 instructions = "\n\n".join([p for p in system_parts if p])
-                prompt_text = "\n\n".join([p for p in user_parts if p])
-
                 if instructions:
                     input_payload["instructions"] = instructions
-                if prompt_text:
-                    input_payload["prompt"] = prompt_text
+
+                input_item_list = []
+                for part in [p for p in user_parts if p]:
+                    input_item_list.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "input_text",
+                                    "text": part,
+                                }
+                            ],
+                        }
+                    )
+                if input_item_list:
+                    input_payload["input_item_list"] = input_item_list
 
                 # Be explicit about model family selection for structured
                 input_payload.setdefault("model", "gpt-5")
@@ -196,7 +211,7 @@ class ReplicateLLMClient(LLMClient):
                 tokens_key = "max_completion_tokens"
                 input_payload[tokens_key] = self._max_completion_tokens
 
-            # Merge any extras (e.g., json_schema) as recommended by guide
+            # Merge any extras (e.g., response_format.json_schema) as recommended by guide
             if extra_input:
                 input_payload.update(extra_input)
 
@@ -219,11 +234,24 @@ class ReplicateLLMClient(LLMClient):
             elif isinstance(out, str):
                 text = out
             elif isinstance(out, dict):
-                # Some models may return a JSON object directly
-                try:
-                    text = json.dumps(out, ensure_ascii=False)
-                except Exception:
-                    text = str(out)
+                # Replicate may return a dict with keys like 'json_output' and 'text'
+                if "json_output" in out:
+                    jo = out.get("json_output")
+                    if isinstance(jo, str):
+                        text = jo
+                    else:
+                        try:
+                            text = json.dumps(jo, ensure_ascii=False)
+                        except Exception:
+                            text = str(jo)
+                elif "text" in out and isinstance(out.get("text"), str):
+                    text = out.get("text") or ""
+                else:
+                    # Fallback to dumping the whole object
+                    try:
+                        text = json.dumps(out, ensure_ascii=False)
+                    except Exception:
+                        text = str(out)
             else:
                 # Many models stream an iterator of string chunks
                 try:
@@ -264,10 +292,22 @@ class ReplicateLLMClient(LLMClient):
                     elif isinstance(_retry_out, str):
                         text = _retry_out
                     elif isinstance(_retry_out, dict):
-                        try:
-                            text = json.dumps(_retry_out, ensure_ascii=False)
-                        except Exception:
-                            text = str(_retry_out)
+                        if "json_output" in _retry_out:
+                            jo = _retry_out.get("json_output")
+                            if isinstance(jo, str):
+                                text = jo
+                            else:
+                                try:
+                                    text = json.dumps(jo, ensure_ascii=False)
+                                except Exception:
+                                    text = str(jo)
+                        elif "text" in _retry_out and isinstance(_retry_out.get("text"), str):
+                            text = _retry_out.get("text") or ""
+                        else:
+                            try:
+                                text = json.dumps(_retry_out, ensure_ascii=False)
+                            except Exception:
+                                text = str(_retry_out)
                     else:
                         try:
                             _retry_chunks = list(_retry_out)  # type: ignore[arg-type]
@@ -297,8 +337,8 @@ class ReplicateLLMClient(LLMClient):
 
     def generate_structured_notes(self, text: str) -> List[Dict[str, Any]]:
         user_prompt = self._prompt("insights", "user").format(raw_text=text)
-        # Ask for strict JSON per docs using json_schema merged via _extra_input
-        json_schema = {
+        # Ask for strict JSON per docs using response_format.json_schema merged via _extra_input
+        schema = {
             "type": "object",
             "properties": {
                 "insights": {
@@ -327,7 +367,18 @@ class ReplicateLLMClient(LLMClient):
             [
                 {"role": "system", "content": self._prompt("insights", "system")},
                 {"role": "user", "content": user_prompt},
-                {"_extra_input": {"json_schema": json_schema}},
+                {
+                    "_extra_input": {
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": "insights_extraction",
+                                "strict": True,
+                                "schema": schema,
+                            },
+                        }
+                    }
+                },
             ],
         )
         data = self._parse_json(content)
@@ -340,7 +391,7 @@ class ReplicateLLMClient(LLMClient):
         user_prompt = self._prompt("topics", "user").format(
             insights="\n".join(lines)
         )
-        json_schema = {
+        schema = {
             "type": "object",
             "properties": {
                 "topics": {
@@ -370,7 +421,18 @@ class ReplicateLLMClient(LLMClient):
             [
                 {"role": "system", "content": self._prompt("topics", "system")},
                 {"role": "user", "content": user_prompt},
-                {"_extra_input": {"json_schema": json_schema}},
+                {
+                    "_extra_input": {
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": "topics_grouping",
+                                "strict": True,
+                                "schema": schema,
+                            },
+                        }
+                    }
+                },
             ],
         )
         return self._parse_json(content)
@@ -415,7 +477,7 @@ class ReplicateLLMClient(LLMClient):
             summary=summary,
             candidates=json.dumps(candidates, ensure_ascii=False),
         )
-        json_schema = {
+        schema = {
             "type": "object",
             "properties": {
                 "related_titles": {
@@ -431,7 +493,18 @@ class ReplicateLLMClient(LLMClient):
             [
                 {"role": "system", "content": self._prompt("autolink", "system")},
                 {"role": "user", "content": user_prompt},
-                {"_extra_input": {"json_schema": json_schema}},
+                {
+                    "_extra_input": {
+                        "response_format": {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": "autolinks",
+                                "strict": True,
+                                "schema": schema,
+                            },
+                        }
+                    }
+                },
             ],
         )
         data = self._parse_json(content)
