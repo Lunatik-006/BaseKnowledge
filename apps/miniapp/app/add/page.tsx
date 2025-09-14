@@ -32,8 +32,11 @@ export default function AddPage() {
       } else if (tab === 'video') {
         res = await ingestVideo(videoUrl);
       }
-    } catch (err: any) {
-      res = { ok: false, error: err?.message || 'Error' };
+    } catch (err: unknown) {
+      const message = err instanceof Error
+        ? err.message
+        : 'Error';
+      res = { ok: false, error: message };
     }
     if (res.ok) {
       setStatus('success');
@@ -128,4 +131,3 @@ export default function AddPage() {
     </main>
   );
 }
-

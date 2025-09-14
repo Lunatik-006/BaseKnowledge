@@ -42,7 +42,12 @@ export default function MyDataPage() {
           placeholder={t('my.search.placeholder')}
           style={{ flex: 1 }}
         />
-        <select value={sort} onChange={(e) => setSort(e.target.value as any)}>
+        <select
+          value={sort}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+            setSort(e.target.value as 'title-asc' | 'title-desc')
+          }
+        >
           <option value="title-asc">{t('my.sort.titleAsc')}</option>
           <option value="title-desc">{t('my.sort.titleDesc')}</option>
         </select>
@@ -82,4 +87,3 @@ export default function MyDataPage() {
     </main>
   );
 }
-

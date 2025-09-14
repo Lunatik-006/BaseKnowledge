@@ -79,7 +79,7 @@ async function handleIngestResponse(res: Response): Promise<IngestResult> {
   try {
     const data = await res.json();
     return { ok: false, error: data?.error || `HTTP ${res.status}` };
-  } catch (_) {
+  } catch {
     return { ok: false, error: `HTTP ${res.status}` };
   }
 }
