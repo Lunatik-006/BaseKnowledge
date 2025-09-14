@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, AsyncIterator, List
 
-from fastapi import Depends, FastAPI, HTTPException, Header, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, status, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 from telegram import Bot, Update
@@ -166,6 +166,66 @@ class BotUpdateSettingsRequest(BaseModel):
 app = FastAPI(title="BaseKnowledge API")
 
 
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    import logging as _logging
+    import time
+    import uuid
+
+    settings = get_settings()
+    start = time.perf_counter()
+    req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    request.state.request_id = req_id
+    try:
+        response: Response = await call_next(request)
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        in_len = int(request.headers.get("content-length", "0") or 0)
+        out_len = int(response.headers.get("content-length", "0") or 0)
+        db_name = ""
+        try:
+            db_uri = settings.postgres_uri
+            db_name = db_uri.rsplit("/", 1)[-1]
+        except Exception:
+            pass
+        _logging.getLogger("api").info(
+            "request",
+            extra={
+                "request_id": req_id,
+                "route": request.url.path,
+                "method": request.method,
+                "status": getattr(response, "status_code", 0),
+                "duration_ms": duration_ms,
+                "payload_in": in_len,
+                "payload_out": out_len,
+                "db": {"name": db_name},
+            },
+        )
+        response.headers["X-Request-ID"] = req_id
+        return response
+    except Exception:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        _logging.getLogger("api").exception(
+            "unhandled_error",
+            extra={
+                "request_id": req_id,
+                "route": request.url.path,
+                "method": request.method,
+                "duration_ms": duration_ms,
+            },
+        )
+        raise
+
+
+def require_json_content_type(request: Request) -> None:
+    """Enforce application/json for JSON endpoints."""
+    if request.method in {"POST", "PUT", "PATCH"}:
+        ctype = request.headers.get("content-type", "").lower()
+        if "application/json" not in ctype:
+            raise HTTPException(
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Content-Type must be application/json",
+            )
+
 @app.on_event("startup")
 async def startup() -> None:
     await init_db()
@@ -189,6 +249,7 @@ async def user_settings(user: models.User = Depends(current_user)) -> Dict[str, 
 @app.post("/user/lang")
 async def update_user_lang(
     req: UpdateLanguageRequest,
+    _: None = Depends(require_json_content_type),
     user: models.User = Depends(current_user),
     session: AsyncSession = Depends(db_session),
 ) -> Dict[str, Any]:
@@ -200,6 +261,7 @@ async def update_user_lang(
 @app.post("/user/settings")
 async def update_user_settings(
     req: UpdateSettingsRequest,
+    _: None = Depends(require_json_content_type),
     user: models.User = Depends(current_user),
     session: AsyncSession = Depends(db_session),
 ) -> Dict[str, Any]:
@@ -215,6 +277,7 @@ async def update_user_settings(
 @app.post("/bot/user/lang")
 async def bot_update_user_lang(
     req: BotUpdateLangRequest,
+    _: None = Depends(require_json_content_type),
     bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
     session: AsyncSession = Depends(db_session),
 ) -> Dict[str, Any]:
@@ -253,6 +316,7 @@ async def bot_get_user_settings(
 @app.post("/bot/user/settings")
 async def bot_update_user_settings(
     req: BotUpdateSettingsRequest,
+    _: None = Depends(require_json_content_type),
     bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
     session: AsyncSession = Depends(db_session),
 ) -> Dict[str, Any]:
@@ -308,6 +372,7 @@ async def bot_get_ui_state(
 @app.post("/bot/user/ui_state")
 async def bot_update_ui_state(
     req: BotUiStateRequest,
+    _: None = Depends(require_json_content_type),
     bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
     session: AsyncSession = Depends(db_session),
 ) -> Dict[str, Any]:
@@ -361,6 +426,7 @@ async def auth_telegram(user: models.User = Depends(current_user)) -> Dict[str, 
 @app.post("/ingest/text", status_code=status.HTTP_201_CREATED)
 async def ingest_text(
     req: IngestTextRequest,
+    _: None = Depends(require_json_content_type),
     uc: IngestText = Depends(ingest_text_uc),
     storage: NotesStorage = Depends(get_storage),
     user: models.User = Depends(current_user),
@@ -385,18 +451,19 @@ async def ingest_text(
 
 
 @app.post("/ingest/video", status_code=status.HTTP_501_NOT_IMPLEMENTED)
-def ingest_video() -> Dict[str, str]:
+def ingest_video(_: None = Depends(require_json_content_type)) -> Dict[str, str]:
     return {"detail": "Not implemented"}
 
 
 @app.post("/ingest/image", status_code=status.HTTP_501_NOT_IMPLEMENTED)
-def ingest_image() -> Dict[str, str]:
+def ingest_image(_: None = Depends(require_json_content_type)) -> Dict[str, str]:
     return {"detail": "Not implemented"}
 
 
 @app.post("/search")
 def search(
     req: SearchRequest,
+    _: None = Depends(require_json_content_type),
     uc: Search = Depends(search_uc),
     user: models.User = Depends(current_user),
 ) -> Dict[str, Any]:
@@ -462,6 +529,7 @@ def export_zip(
 async def telegram_webhook(
     secret: str,
     payload: Dict[str, Any],
+    _: None = Depends(require_json_content_type),
     uc: IngestText = Depends(ingest_text_uc),
 ) -> Dict[str, str]:
     settings = get_settings()

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     postgres_uri: str = Field(default_factory=_default_postgres_uri_from_env)
     vault_dir: Path = Field(default=Path("/tmp/vault"))
     log_level: str = Field(default="INFO")
+    # Observability
+    service_name: str = Field(default="api")
+    environment: str = Field(default="development")
     # LLM diagnostics & limits
     llm_log_payloads: bool = Field(
         default=False,

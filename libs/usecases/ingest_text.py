@@ -49,10 +49,48 @@ _CYRILLIC_MAP = {
     "я": "ya",
 }
 
+# Correct transliteration map (lowercase), used when present
+_CYRILLIC_MAP_FIX = {
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "д": "d",
+    "е": "e",
+    "ё": "e",
+    "ж": "zh",
+    "з": "z",
+    "и": "i",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "h",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "shch",
+    "ъ": "",
+    "ы": "y",
+    "ь": "",
+    "э": "e",
+    "ю": "yu",
+    "я": "ya",
+}
+
 
 def _slugify(text: str) -> str:
     text = text.lower()
-    text = "".join(_CYRILLIC_MAP.get(ch, ch) for ch in text)
+    # Prefer the fixed map; fallback to legacy map for any missing chars
+    text = "".join(_CYRILLIC_MAP_FIX.get(ch, _CYRILLIC_MAP.get(ch, ch)) for ch in text)
     text = unicodedata.normalize("NFKD", text)
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = re.sub(r"[^a-z0-9]+", "-", text)
@@ -69,6 +107,23 @@ def _chunk_text(text: str, size: int = 500, overlap: int = 50) -> List[str]:
         chunks.append(text[start:end])
         start = end - overlap
     return chunks
+
+
+def _normalize_tag(tag: str) -> str:
+    tag = tag.strip()
+    if not tag:
+        return ""
+    return _slugify(tag)
+
+
+def _dedup_preserve_order(items: List[str]) -> List[str]:
+    seen: set[str] = set()
+    out: List[str] = []
+    for it in items:
+        if it not in seen:
+            seen.add(it)
+            out.append(it)
+    return out
 
 
 class IngestText:
@@ -121,7 +176,36 @@ class IngestText:
         self.storage.notes_dir.mkdir(parents=True, exist_ok=True)
 
         notes: List[models.Note] = []
+        import logging as _logging
+        required_fields = {"id", "title", "summary", "bullets", "tags", "confidence"}
         for insight in insights:
+            # Validate and normalize insight fields server-side
+            title = str(insight.get("title", "")).strip() or "untitled"
+            if len(title) > 80:
+                title = title[:77] + "..."
+            bullets_in = [str(b) for b in (insight.get("bullets") or []) if str(b).strip()]
+            bullets_in = _dedup_preserve_order(bullets_in)
+            tags_in = [str(t) for t in (insight.get("tags") or []) if str(t).strip()]
+            tags_norm = _dedup_preserve_order([_normalize_tag(t) for t in tags_in if _normalize_tag(t)])
+
+            # Write back normalized values for downstream prompt
+            insight["title"] = title
+            insight["bullets"] = bullets_in
+            insight["tags"] = tags_norm
+
+            # Quick validity check and controlled degradation
+            missing = [k for k in required_fields if k not in insight]
+            if missing:
+                _logging.getLogger("ingest").warning(
+                    "llm_invalid_insight_missing_fields",
+                    extra={"missing": missing, "insight_preview": {"title": title}},
+                )
+                # Fill sane defaults to avoid pipeline failure
+                insight.setdefault("summary", "")
+                insight.setdefault("bullets", [])
+                insight.setdefault("tags", [])
+                insight.setdefault("confidence", 0.0)
+
             rendered = self.llm.render_note_markdown(insight)
             front: Dict[str, Any] = {}
             body = rendered
@@ -132,20 +216,27 @@ class IngestText:
                     front = _load_yaml(fm)
                     body = body.lstrip("\n")
 
-            title = front.get("title") or insight.get("title", "untitled")
-            tags = front.get("tags") or insight.get("tags", [])
+            # Prefer normalized server-side values over model/frontmatter
+            title = front.get("title") or title
+            tags = front.get("tags") or tags_norm
 
             fm_meta = {k: v for k, v in front.items() if k not in {"title", "tags"}}
             meta = {**insight.get("meta", {}), **fm_meta}
 
             slug = _slugify(title)
 
+            # Generate server-side created timestamp if not provided
+            from datetime import datetime, timezone
+            created_str = meta.get("created")
+            if not created_str:
+                created_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
             fs_note = FsNote(
                 slug=slug,
                 title=title,
                 tags=tags,
                 body=body,
-                created=meta.get("created"),
+                created=created_str,
                 source_url=meta.get("source_url"),
                 author=meta.get("source_author"),
                 dt=meta.get("source_dt"),
@@ -164,6 +255,9 @@ class IngestText:
             for key, value in meta.items():
                 mapped = meta_mapping.get(key, key)
                 if mapped in allowed_fields:
+                    # Normalize empty strings to None
+                    if isinstance(value, str) and not value.strip():
+                        value = None
                     db_meta[mapped] = value
 
             note = await self.note_repo.create(

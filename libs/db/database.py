@@ -29,7 +29,16 @@ class Base(DeclarativeBase):
 
 
 # create async engine and session factory
-engine: AsyncEngine = create_async_engine(DATABASE_URL, echo=False, future=True)
+# Create async engine with resilient pool settings to survive Postgres restarts
+# - pool_pre_ping: validate connections before using
+# - pool_recycle: proactively recycle connections to avoid server-side timeouts
+engine: AsyncEngine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    future=True,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

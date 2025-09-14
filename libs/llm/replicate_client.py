@@ -354,8 +354,8 @@ class ReplicateLLMClient(LLMClient):
                             "confidence": {"type": "number"},
                             "meta": {"type": "object"},
                         },
-                        "required": ["title", "summary"],
-                        "additionalProperties": True,
+                        "required": ["id", "title", "summary", "bullets", "tags", "confidence"],
+                        "additionalProperties": False,
                     },
                 }
             },
@@ -408,13 +408,13 @@ class ReplicateLLMClient(LLMClient):
                             },
                         },
                         "required": ["topic_id", "title", "insight_ids"],
-                        "additionalProperties": True,
+                        "additionalProperties": False,
                     },
                 },
                 "orphans": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["topics"],
-            "additionalProperties": True,
+            "additionalProperties": False,
         }
         content = self._call(
             "openai/gpt-5-structured",
