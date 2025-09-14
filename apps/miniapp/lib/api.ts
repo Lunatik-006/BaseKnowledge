@@ -70,3 +70,56 @@ export function getZipUrl(): string {
 export function getObsidianUrl(slug: string): string {
   return `obsidian://${slug}`;
 }
+
+// Ingest API: image, audio/voice, text, video
+export type IngestResult = { ok: true } | { ok: false; error: string };
+
+async function handleIngestResponse(res: Response): Promise<IngestResult> {
+  if (res.ok) return { ok: true };
+  try {
+    const data = await res.json();
+    return { ok: false, error: data?.error || `HTTP ${res.status}` };
+  } catch (_) {
+    return { ok: false, error: `HTTP ${res.status}` };
+  }
+}
+
+export async function ingestImage(file: File): Promise<IngestResult> {
+  const fd = new FormData();
+  fd.append('file', file, file.name || 'image');
+  const res = await fetch(`${API_BASE_URL}/ingest/image`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: fd,
+  });
+  return handleIngestResponse(res);
+}
+
+export async function ingestAudio(file: File): Promise<IngestResult> {
+  const fd = new FormData();
+  fd.append('file', file, file.name || 'audio');
+  const res = await fetch(`${API_BASE_URL}/ingest/audio`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: fd,
+  });
+  return handleIngestResponse(res);
+}
+
+export async function ingestText(text: string): Promise<IngestResult> {
+  const res = await fetch(`${API_BASE_URL}/ingest/text`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ text }),
+  });
+  return handleIngestResponse(res);
+}
+
+export async function ingestVideo(sourceUrl: string): Promise<IngestResult> {
+  const res = await fetch(`${API_BASE_URL}/ingest/video`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ source_url: sourceUrl }),
+  });
+  return handleIngestResponse(res);
+}

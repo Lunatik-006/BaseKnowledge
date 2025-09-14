@@ -25,6 +25,12 @@ export default function Header() {
         BaseKnowledge
       </Link>
       <nav style={{ display: "flex", gap: 8 }}>
+        <Link href="/add">
+          <button>{t("header.add")}</button>
+        </Link>
+        <Link href="/my_data">
+          <button>{t("header.myData")}</button>
+        </Link>
         <Link href="/search">
           <button>{t("header.search")}</button>
         </Link>
@@ -35,4 +41,3 @@ export default function Header() {
     </header>
   );
 }
-

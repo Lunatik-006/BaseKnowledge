@@ -36,3 +36,99 @@ lang_en: "English"
 lang_ru: "Русский"
 lang_set_en: "Language set to English."
 lang_set_ru: "Language set to Russian."
+
+# --- Block 1 additions: menu and settings ---
+menu_title: "Main menu"
+menu_body: |
+  Commands and actions:
+  /create_project - Create a new project (will hold your materials and outputs)
+  /open_project - Open an existing project
+  /add_materials - Add materials (text/image/audio/video)
+  /my_data - View your uploaded materials (alpha: read-only)
+  /create_knowledge_base - Build Knowledge Base from saved materials
+  /create_course - Generate a course from the structure
+  /settings - Language, target level, and tone
+  /help - Help and usage tips
+
+settings_title: "Settings"
+settings_choose: "Select your language, target level, and tone."
+settings_saved: "Settings updated."
+settings_back: "Back to settings"
+settings_preview: "Preview"
+settings_language: "Language"
+settings_level: "Target level"
+settings_tone: "Tone"
+
+level_beginner: "Beginner"
+level_intermediate: "Intermediate"
+level_advanced: "Advanced"
+
+tone_pragmatic: "Pragmatic"
+tone_motivational: "Motivational"
+tone_charismatic: "Charismatic"
+
+preview_title: "Quick preview"
+preview_note: "How titles/descriptions change with selected style/level/language (no regrouping)."
+preview_label_title: "Title"
+preview_label_level: "Level"
+preview_label_tone: "Tone"
+
+preview_title_beginner: "Focus Basics"
+preview_title_intermediate: "Sharpen Your Focus"
+preview_title_advanced: "Elite Focus: Sustain Peak"
+
+preview_desc_pragmatic: "Clear steps, simple language, concrete examples."
+preview_desc_motivational: "Energetic tone, inspiring calls-to-action, quick wins."
+preview_desc_charismatic: "Friendly voice, light storytelling, memorable phrasing."
+
+unknown_command: "Unknown command. Type /menu or /help."
+
+# --- Block 2: Projects and materials ---
+create_project_name_prompt: "Enter a project name (e.g., ‘Focus Sprint #1’)."
+create_project_confirm: "Create project ‘{name}’?"
+create_project_created: "Project ‘{name}’ created."
+project_howto: |
+  How to work in a project:
+  - Add 5–10 materials (text, images, audio, video)
+  - We’ll analyze them and outline a draft structure
+  - Later, you can build a knowledge base and a course
+add_materials_btn: "Add materials"
+create_project_btn: "Create project"
+default_project_name: "Default"
+action_cancelled: "Cancelled."
+yes: "Yes"
+no: "No"
+cancel: "Cancel"
+done: "Done"
+
+empty_state_text: "Empty project. Add 5–10 materials to draft your course."
+
+open_project_choose: "Open a project:"
+open_project_empty: "No projects yet. Create a new one."
+open_project_open_btn: "Open ‘{name}’"
+open_project_opened: "Project ‘{name}’ opened!"
+
+add_materials_choose_type: "Choose material type:"
+mat_type_text: "Text"
+mat_type_image: "Image"
+mat_type_audio: "Audio/Voice"
+mat_type_video: "Video/Link"
+add_text_instructions: "Send up to 10 text messages. Press ‘Done’ when finished."
+add_image_instructions: "Send photos with text you want to capture (OCR soon)."
+add_audio_instructions: "Send audio/voice messages (we’ll transcribe soon)."
+add_video_instructions: "Send a YouTube link (we’ll fetch content soon)."
+materials_saved_more: "Saved. Send more or press ‘Done’."
+materials_limit_reached: "Limit reached (10 items). Press ‘Done’."
+use_add_materials_first: "Use /add_materials to choose a type first."
+processing_short: "Processing…"
+not_implemented_yet: "Feature not implemented yet. Coming soon."
+coming_soon_image: "Got a photo. Image OCR ingestion coming soon."
+coming_soon_audio: "Got audio/voice. Transcription coming soon."
+coming_soon_video: "Got a video item. Video link ingestion coming soon."
+
+# UX statuses
+status_empty: "Empty"
+status_loading: "Loading"
+status_warning: "Warning"
+status_error: "Error"
+status_success: "Success"

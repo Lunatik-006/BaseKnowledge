@@ -42,6 +42,40 @@ class UserRepo:
         await self.session.flush()
         return user
 
+    async def set_settings(
+        self,
+        user: models.User,
+        *,
+        target_level: str | None = None,
+        tone: str | None = None,
+    ) -> models.User:
+        if target_level:
+            user.target_level = target_level
+        if tone:
+            user.tone = tone
+        await self.session.flush()
+        return user
+
+    async def set_ui_state(
+        self,
+        user: models.User,
+        *,
+        last_menu_message_id: int | None = None,
+        last_screen: str | None = None,
+        current_project: str | None = None,
+        ts=None,
+    ) -> models.User:
+        from datetime import datetime as _dt
+        if last_menu_message_id is not None:
+            user.last_menu_message_id = last_menu_message_id
+        if last_screen is not None:
+            user.last_screen = last_screen
+        if current_project is not None:
+            user.current_project = current_project
+        user.ui_state_updated_at = ts or _dt.utcnow()
+        await self.session.flush()
+        return user
+
 
 class NoteRepo:
     """CRUD operations for :class:`models.Note`."""

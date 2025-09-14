@@ -21,6 +21,14 @@ class User(Base):
     )
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     language: Mapped[str] = mapped_column(String(8), default='en')
+    # UI/UX preferences
+    target_level: Mapped[str] = mapped_column(String(16), default='beginner')
+    tone: Mapped[str] = mapped_column(String(16), default='pragmatic')
+    # UI state persistence (best-effort)
+    last_menu_message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    last_screen: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    current_project: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    ui_state_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow
     )

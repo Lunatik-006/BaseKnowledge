@@ -149,6 +149,17 @@ class BotUpdateLangRequest(BaseModel):
     lang: str = Field(pattern="^(en|ru)$")
 
 
+class UpdateSettingsRequest(BaseModel):
+    target_level: Optional[str] = Field(default=None, pattern="^(beginner|intermediate|advanced)$")
+    tone: Optional[str] = Field(default=None, pattern="^(pragmatic|motivational|charismatic)$")
+
+
+class BotUpdateSettingsRequest(BaseModel):
+    telegram_id: int
+    target_level: Optional[str] = Field(default=None, pattern="^(beginner|intermediate|advanced)$")
+    tone: Optional[str] = Field(default=None, pattern="^(pragmatic|motivational|charismatic)$")
+
+
 # ---------------------------------------------------------------------------
 # FastAPI application
 
@@ -168,7 +179,11 @@ def health() -> Dict[str, str]:
 
 @app.get("/user/settings")
 async def user_settings(user: models.User = Depends(current_user)) -> Dict[str, Any]:
-    return {"lang": getattr(user, "language", "en") or "en"}
+    return {
+        "lang": getattr(user, "language", "en") or "en",
+        "target_level": getattr(user, "target_level", "beginner") or "beginner",
+        "tone": getattr(user, "tone", "pragmatic") or "pragmatic",
+    }
 
 
 @app.post("/user/lang")
@@ -180,6 +195,21 @@ async def update_user_lang(
     repo = UserRepo(session)
     await repo.set_language(user, req.lang)
     return {"status": "ok", "lang": req.lang}
+
+
+@app.post("/user/settings")
+async def update_user_settings(
+    req: UpdateSettingsRequest,
+    user: models.User = Depends(current_user),
+    session: AsyncSession = Depends(db_session),
+) -> Dict[str, Any]:
+    repo = UserRepo(session)
+    await repo.set_settings(user, target_level=req.target_level, tone=req.tone)
+    return {
+        "status": "ok",
+        "target_level": getattr(user, "target_level", "beginner"),
+        "tone": getattr(user, "tone", "pragmatic"),
+    }
 
 
 @app.post("/bot/user/lang")
@@ -198,6 +228,103 @@ async def bot_update_user_lang(
     else:
         await repo.set_language(user, req.lang)
     return {"status": "ok", "lang": req.lang}
+
+
+@app.get("/bot/user/settings")
+async def bot_get_user_settings(
+    telegram_id: int = Query(...),
+    bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
+    session: AsyncSession = Depends(db_session),
+) -> Dict[str, Any]:
+    settings = get_settings()
+    if not bot_api_token or bot_api_token != settings.bot_api_token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    repo = UserRepo(session)
+    user = await repo.get_by_telegram(telegram_id)
+    if not user:
+        user = await repo.create(telegram_id)
+    return {
+        "lang": getattr(user, "language", "en") or "en",
+        "target_level": getattr(user, "target_level", "beginner") or "beginner",
+        "tone": getattr(user, "tone", "pragmatic") or "pragmatic",
+    }
+
+
+@app.post("/bot/user/settings")
+async def bot_update_user_settings(
+    req: BotUpdateSettingsRequest,
+    bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
+    session: AsyncSession = Depends(db_session),
+) -> Dict[str, Any]:
+    settings = get_settings()
+    if not bot_api_token or bot_api_token != settings.bot_api_token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    repo = UserRepo(session)
+    user = await repo.get_by_telegram(req.telegram_id)
+    if not user:
+        user = await repo.create(req.telegram_id)
+    await repo.set_settings(user, target_level=req.target_level, tone=req.tone)
+    return {
+        "status": "ok",
+        "target_level": getattr(user, "target_level", "beginner"),
+        "tone": getattr(user, "tone", "pragmatic"),
+    }
+
+
+# UI state endpoints for the bot ---------------------------------------------------
+
+class BotUiStateRequest(BaseModel):
+    telegram_id: int
+    last_menu_message_id: Optional[int] = None
+    last_screen: Optional[str] = None
+    current_project: Optional[str] = None
+
+
+@app.get("/bot/user/ui_state")
+async def bot_get_ui_state(
+    telegram_id: int = Query(...),
+    bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
+    session: AsyncSession = Depends(db_session),
+) -> Dict[str, Any]:
+    settings = get_settings()
+    if not bot_api_token or bot_api_token != settings.bot_api_token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    repo = UserRepo(session)
+    user = await repo.get_by_telegram(telegram_id)
+    if not user:
+        user = await repo.create(telegram_id)
+    # TTL: 3600s; if expired, return empty state
+    from datetime import datetime, timedelta
+    ts = getattr(user, "ui_state_updated_at", None)
+    if not ts or ts < datetime.utcnow() - timedelta(seconds=3600):
+        return {"last_menu_message_id": None, "last_screen": None, "current_project": None}
+    return {
+        "last_menu_message_id": getattr(user, "last_menu_message_id", None),
+        "last_screen": getattr(user, "last_screen", None),
+        "current_project": getattr(user, "current_project", None),
+    }
+
+
+@app.post("/bot/user/ui_state")
+async def bot_update_ui_state(
+    req: BotUiStateRequest,
+    bot_api_token: str | None = Header(None, alias="X-Bot-Api-Token"),
+    session: AsyncSession = Depends(db_session),
+) -> Dict[str, Any]:
+    settings = get_settings()
+    if not bot_api_token or bot_api_token != settings.bot_api_token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    repo = UserRepo(session)
+    user = await repo.get_by_telegram(req.telegram_id)
+    if not user:
+        user = await repo.create(req.telegram_id)
+    await repo.set_ui_state(
+        user,
+        last_menu_message_id=req.last_menu_message_id,
+        last_screen=req.last_screen,
+        current_project=req.current_project,
+    )
+    return {"status": "ok"}
 
 
 # Factory dependencies for use cases -------------------------------------------------
