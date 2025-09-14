@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.schema import CreateColumn
+from sqlalchemy.engine.url import make_url
 
 from libs.core.settings import get_settings
 
@@ -116,6 +117,33 @@ async def init_db() -> None:
     delay = 5
     logger = logging.getLogger(__name__)
     last_exc: SQLAlchemyError | None = None
+
+    # Proactively ensure target database exists (Postgres only)
+    try:
+        url = make_url(DATABASE_URL)
+    except Exception:  # pragma: no cover - defensive
+        url = None
+
+    if url is not None and url.drivername.startswith("postgresql"):
+        try:
+            maint_url = url.set(database="postgres")
+            maint_engine = create_engine(maint_url)
+            with maint_engine.connect() as conn:
+                exists = conn.execute(
+                    text("SELECT 1 FROM pg_database WHERE datname=:db"),
+                    {"db": url.database},
+                ).scalar()
+                if exists != 1:
+                    # CREATE DATABASE must run outside a transaction block
+                    conn.execution_options(isolation_level="AUTOCOMMIT").execute(
+                        text(f'CREATE DATABASE "{url.database}"')
+                    )
+                    logging.getLogger(__name__).info(
+                        "Created missing database '%s'", url.database
+                    )
+            maint_engine.dispose()
+        except Exception:  # pragma: no cover - best effort
+            pass
 
     for attempt in range(1, max_attempts + 1):
         try:
